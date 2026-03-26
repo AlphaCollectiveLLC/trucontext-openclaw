@@ -11,7 +11,7 @@
  */
 
 import fs from 'fs';
-import { execSync } from 'child_process';
+import { execSync, spawnSync } from 'child_process';
 import { readState, updateState } from './state.js';
 import { discoverAgents } from './discover.js';
 import { harvestDelta } from './harvest.js';
@@ -125,8 +125,10 @@ export function registerCron({ alertChannel = 'slack', alertTo = null } = {}) {
   _removeCronIfExists();
 
   // Step 1: Register the job
+  // Use spawnSync with arg array — avoids shell splitting on spaces in values
+  // like CRON_NAME ("TruContext — Daily Maintenance") and CRON_DESCRIPTION.
   const addArgs = [
-    'openclaw', 'cron', 'add',
+    'cron', 'add',
     '--name', CRON_NAME,
     '--cron', CRON_SCHEDULE,
     '--tz', CRON_TZ,
@@ -139,8 +141,9 @@ export function registerCron({ alertChannel = 'slack', alertTo = null } = {}) {
 
   let assignedId;
   try {
-    const result = execSync(addArgs.join(' '), { encoding: 'utf8' });
-    const parsed = JSON.parse(result);
+    const result = spawnSync('openclaw', addArgs, { encoding: 'utf8' });
+    if (result.status !== 0) throw new Error(result.stderr || 'non-zero exit');
+    const parsed = JSON.parse(result.stdout);
     assignedId = parsed?.id ?? CRON_ID;
     log.debug(`Cron registered: ${assignedId}`);
   } catch (err) {
@@ -150,7 +153,7 @@ export function registerCron({ alertChannel = 'slack', alertTo = null } = {}) {
   // Step 2: Apply failure alerts via cron edit
   // (--failure-alert-* flags are only available on `cron edit`, not `cron add`)
   const editArgs = [
-    'openclaw', 'cron', 'edit', assignedId,
+    'cron', 'edit', assignedId,
     '--failure-alert',
     '--failure-alert-channel', alertChannel,
     '--failure-alert-after', '2',
@@ -160,7 +163,8 @@ export function registerCron({ alertChannel = 'slack', alertTo = null } = {}) {
     editArgs.push('--failure-alert-to', alertTo);
   }
   try {
-    execSync(editArgs.join(' '), { encoding: 'utf8', stdio: 'pipe' });
+    const editResult = spawnSync('openclaw', editArgs, { encoding: 'utf8' });
+    if (editResult.status !== 0) throw new Error(editResult.stderr || 'non-zero exit');
     log.debug(`Failure alerts configured for cron: ${assignedId}`);
   } catch (err) {
     // Non-fatal: cron is registered, alerts just won't fire
