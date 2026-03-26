@@ -1,7 +1,8 @@
 ---
 name: trucontext-openclaw
 description: "TruContext persistent memory for OpenClaw agents. Use when you need to remember something significant across sessions, recall prior context, query the knowledge graph, check what TC is curious about, or declare entity nodes. Triggers on: 'remember this', 'recall what we know about', 'check TC', 'what has TC flagged', 'create a node for', 'find the node for'."
-metadata: {"openclaw": {"emoji": "🧠", "requires": {"bins": ["trucontext", "python3"]}, "install": [{"id": "npm-trucontext-openclaw", "kind": "node", "package": "trucontext-openclaw", "bins": ["trucontext-openclaw"], "label": "Install trucontext-openclaw (npm) — includes TC CLI setup"}]}}
+homepage: https://trucontext.ai
+metadata: {"openclaw": {"emoji": "🧠", "homepage": "https://trucontext.ai", "requires": {"bins": ["trucontext", "python3"]}, "install": [{"id": "npm-trucontext-openclaw", "kind": "node", "package": "trucontext-openclaw", "bins": ["trucontext-openclaw"], "label": "Install trucontext-openclaw (npm) — includes TC CLI setup"}]}}
 ---
 
 # trucontext-openclaw
@@ -90,3 +91,9 @@ Examples of good vs. bad ingests:
 
 Your root node, user root, recipe, and primary_about are pre-configured by `trucontext-openclaw install`.
 You do not need to pass them on every call.
+
+## Source
+
+- Homepage: https://trucontext.ai
+- Source: https://github.com/AlphaCollectiveLLC/trucontext-openclaw
+- npm: https://www.npmjs.com/package/trucontext-openclaw
