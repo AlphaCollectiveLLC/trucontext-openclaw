@@ -5,10 +5,13 @@
  * Job 2: Scan agent workspace files for changes — re-provision if dirty
  * Job 3: Append harvest log
  *
- * Registered in OpenClaw's native cron (openclaw.json) — no system cron needed.
+ * Registered via `openclaw cron add` — NOT by writing openclaw.json directly.
+ * This ensures the job is tracked in OpenClaw's cron registry and survives
+ * config migrations (OpenClaw 2026.3.24+ expects cron as an object, not array).
  */
 
 import fs from 'fs';
+import { execSync } from 'child_process';
 import { readState, updateState } from './state.js';
 import { discoverAgents } from './discover.js';
 import { harvestDelta } from './harvest.js';
@@ -16,9 +19,13 @@ import { provisionOne } from './provision.js';
 import { installSkill } from './skill.js';
 import { getTcVersion, getLatestTcVersion, updateTc } from './auth.js';
 import path from 'path';
-import { log, OPENCLAW_CONFIG_PATH, TC_HARVEST_LOG_PATH } from './utils.js';
+import { log, TC_HARVEST_LOG_PATH } from './utils.js';
 
-const CRON_ID = 'trucontext-openclaw-maintenance';
+export const CRON_ID = 'trucontext-openclaw-maintenance';
+const CRON_NAME = 'TruContext — Daily Maintenance';
+const CRON_SCHEDULE = '0 2 * * *';
+const CRON_TZ = 'America/Chicago';
+const CRON_DESCRIPTION = 'TruContext: check for CLI updates and harvest agent doc changes';
 
 // ---------------------------------------------------------------------------
 // Main sync — called by cron or `trucontext-openclaw sync`
@@ -103,34 +110,72 @@ export async function sync({ verbose = false } = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// Cron registration (written to openclaw.json)
+// Cron registration — uses openclaw CLI, not direct JSON manipulation
 // ---------------------------------------------------------------------------
 
-export function registerCron() {
-  const config = JSON.parse(fs.readFileSync(OPENCLAW_CONFIG_PATH, 'utf8'));
-  config.cron = (config.cron ?? []).filter(c => c.id !== CRON_ID);
-  config.cron.push({
-    id: CRON_ID,
-    schedule: '0 2 * * *',
-    command: 'trucontext-openclaw sync',
-    description: 'TruContext: check for CLI updates and harvest agent doc changes',
-  });
-  fs.writeFileSync(OPENCLAW_CONFIG_PATH, JSON.stringify(config, null, 2), 'utf8');
-  log.debug(`Cron registered: ${CRON_ID}`);
+/**
+ * Register the daily maintenance cron via `openclaw cron add`.
+ * Idempotent: removes any existing job with the same ID first.
+ *
+ * Failure alerts are enabled so sync failures surface to the agent
+ * rather than silently disappearing.
+ */
+export function registerCron({ alertChannel = 'slack', alertTo = null } = {}) {
+  // Remove any stale registration first (idempotent)
+  _removeCronIfExists();
+
+  const args = [
+    'openclaw', 'cron', 'add',
+    '--name', CRON_NAME,
+    '--cron', CRON_SCHEDULE,
+    '--tz', CRON_TZ,
+    '--session', 'isolated',
+    '--agent', 'main',
+    '--message', 'trucontext-openclaw sync',
+    '--description', CRON_DESCRIPTION,
+    '--failure-alert',
+    '--failure-alert-channel', alertChannel,
+    '--failure-alert-after', '2',
+    '--failure-alert-cooldown', '6h',
+    '--json',
+  ];
+
+  // If a delivery target was provided (e.g. "#halbot"), wire it up
+  if (alertTo) {
+    args.push('--failure-alert-to', alertTo);
+  }
+
+  try {
+    const result = execSync(args.join(' '), { encoding: 'utf8' });
+    const parsed = JSON.parse(result);
+    // openclaw cron add --json returns the created job; capture the assigned id
+    const assignedId = parsed?.id ?? CRON_ID;
+    log.debug(`Cron registered: ${assignedId}`);
+    return assignedId;
+  } catch (err) {
+    throw new Error(`Failed to register cron via openclaw CLI: ${err.message}`);
+  }
 }
 
+/**
+ * Unregister the maintenance cron via `openclaw cron rm`.
+ */
 export function unregisterCron() {
-  if (!fs.existsSync(OPENCLAW_CONFIG_PATH)) return;
-  const config = JSON.parse(fs.readFileSync(OPENCLAW_CONFIG_PATH, 'utf8'));
-  if (!config.cron) return;
-  config.cron = config.cron.filter(c => c.id !== CRON_ID);
-  fs.writeFileSync(OPENCLAW_CONFIG_PATH, JSON.stringify(config, null, 2), 'utf8');
-  log.debug(`Cron unregistered: ${CRON_ID}`);
+  _removeCronIfExists();
 }
 
 // ---------------------------------------------------------------------------
-// Internal
+// Internal helpers
 // ---------------------------------------------------------------------------
+
+function _removeCronIfExists() {
+  try {
+    execSync(`openclaw cron rm ${CRON_ID} --json`, { encoding: 'utf8', stdio: 'pipe' });
+    log.debug(`Cron removed: ${CRON_ID}`);
+  } catch {
+    // Job didn't exist — that's fine
+  }
+}
 
 function appendHarvestLog(entries) {
   const dir = path.dirname(TC_HARVEST_LOG_PATH);

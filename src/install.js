@@ -13,6 +13,7 @@
  */
 
 import readline from 'readline';
+import { execSync } from 'child_process';
 import { ensureTcInstalled, checkAuth, login, ensureApp, getTcVersion } from './auth.js';
 import { discoverAgents, getOpenClawWorkspaceRoot } from './discover.js';
 import { provisionOne } from './provision.js';
@@ -85,6 +86,19 @@ export async function install({ args = [] } = {}) {
 
     try {
       await provisionOne({ agentId: agent.id, userRootNode, dryRun, verbose: true });
+      // Sync IDENTITY.md into OpenClaw's agent registry
+      if (!dryRun && agent.workspaceDir) {
+        try {
+          execSync(
+            `openclaw agents set-identity --agent ${agent.id} --from-identity --workspace ${agent.workspaceDir}`,
+            { encoding: 'utf8', stdio: 'pipe' }
+          );
+          log.debug(`  ✓ Identity synced for ${agent.id}`);
+        } catch {
+          // Non-fatal: agent may not have an IDENTITY.md yet
+          log.debug(`  → No IDENTITY.md for ${agent.id}, skipping identity sync`);
+        }
+      }
     } catch (err) {
       log.error(`  ${err.message}`);
     }
@@ -92,14 +106,19 @@ export async function install({ args = [] } = {}) {
 
   log.info('\n── Step 7: Install tc-memory Skill ────────────────────');
   if (!dryRun) {
-    await installSkill(workspaceRoot);
-    log.info(`  ✓ Skill installed: ${workspaceRoot}/skills/tc-memory/`);
+    const { method } = await installSkill(workspaceRoot);
+    if (method === 'clawhub') {
+      log.info('  ✓ Skill installed via ClawHub (managed)');
+    } else {
+      log.info(`  ✓ Skill installed from bundled template: ${workspaceRoot}/skills/tc-memory/`);
+      log.info('  ⚠ Not tracked by openclaw skills — publish to ClawHub to enable managed installs');
+    }
   }
 
   log.info('\n── Step 8: Register Daily Cron ────────────────────────');
   if (!dryRun) {
-    registerCron();
-    log.info('  ✓ Cron registered (daily at 2am)');
+    registerCron({ alertChannel: 'slack' });
+    log.info('  ✓ Cron registered via openclaw CLI (daily at 2am, failure alerts enabled)');
   }
 
   log.info('\n── Step 9: Save State ─────────────────────────────────');

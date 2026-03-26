@@ -5,9 +5,11 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { execSync } from 'child_process';
 import { readState } from './state.js';
 import { checkAuth, getTcVersion, getLatestTcVersion } from './auth.js';
 import { discoverAgents } from './discover.js';
+import { CRON_ID } from './cron.js';
 import { log, TC_HARVEST_LOG_PATH } from './utils.js';
 
 export async function status() {
@@ -53,6 +55,46 @@ export async function status() {
     } else {
       log.info(`    Not provisioned — run: trucontext-openclaw provision ${agent.id}`);
     }
+  }
+
+  log.info('\n── Cron ────────────────────────────────────────────────');
+  try {
+    const cronJson = execSync(`openclaw cron list --json`, { encoding: 'utf8', stdio: 'pipe' });
+    const jobs = JSON.parse(cronJson);
+    const job = Array.isArray(jobs)
+      ? jobs.find(j => j.id === CRON_ID || j.name?.includes('TruContext'))
+      : null;
+    if (job) {
+      log.info(`  ✓ Registered: ${job.name ?? CRON_ID}`);
+      log.info(`    Schedule: ${job.schedule ?? job.cron ?? 'unknown'}`);
+      log.info(`    Status:   ${job.status ?? 'unknown'}`);
+      log.info(`    Last run: ${job.lastRun ?? job.last ?? 'never'}`);
+      log.info(`    Next run: ${job.nextRun ?? job.next ?? 'unknown'}`);
+    } else {
+      log.info('  ✗ Cron not registered — run: trucontext-openclaw install');
+    }
+  } catch {
+    log.info('  ✗ Could not query cron status (is the gateway running?)');
+  }
+
+  log.info('\n── Recent Cron Runs ────────────────────────────────────');
+  try {
+    const runsJson = execSync(
+      `openclaw cron runs --id ${CRON_ID} --limit 5`,
+      { encoding: 'utf8', stdio: 'pipe' }
+    );
+    const runs = JSON.parse(runsJson);
+    if (runs?.length) {
+      for (const run of runs) {
+        const ts = run.startedAt ?? run.at ?? '';
+        const status = run.status ?? run.result ?? '?';
+        log.info(`  ${status === 'ok' || status === 'success' ? '✓' : '✗'} ${ts}  ${status}`);
+      }
+    } else {
+      log.info('  No runs recorded yet');
+    }
+  } catch {
+    log.info('  (run history unavailable)');
   }
 
   log.info('\n── Harvest Log (last 5 entries) ────────────────────────');
