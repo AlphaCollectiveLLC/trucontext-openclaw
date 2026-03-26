@@ -106,7 +106,8 @@ export function ensureApp(preferredName) {
 export function getAccessToken() {
   try {
     const creds = JSON.parse(fs.readFileSync(TC_CREDENTIALS_PATH, 'utf8'));
-    const token = creds.accessToken ?? creds.token ?? null;
+    // TC API requires idToken (Cognito identity token), not accessToken
+    const token = creds.idToken ?? creds.accessToken ?? creds.token ?? null;
     if (!token) throw new Error('No token in credentials file.');
     return token;
   } catch {

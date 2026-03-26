@@ -9,6 +9,7 @@ import { harvestAgent, harvestDelta, getFileMtimeMap } from './harvest.js';
 import { provisionAgent } from './tc-api.js';
 import { injectFragment } from './inject.js';
 import { readState, registerAgent } from './state.js';
+import { getTcVersion } from './auth.js';
 
 /**
  * Provision a single agent (new or re-provision).
@@ -86,7 +87,6 @@ export async function provisionOne({ agentId, reProvision = false, userRootNode,
     if (verbose && fragmentChanged) console.log(`  ✓ AGENTS.md updated`);
 
     // Update state — map from actual response fields
-    const { getTcVersion } = await import('./auth.js');
     registerAgent(agentId, {
       name: agent.name,
       workspace: agent.workspace,
