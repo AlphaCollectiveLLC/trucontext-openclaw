@@ -8,16 +8,25 @@
 import fs from 'fs';
 import crypto from 'crypto';
 
+// TC API currently returns "## Memory" as the fragment header.
+// We detect both "## Memory" (TC-generated) and "## TruContext Memory" (our preferred header)
+// and normalize to "## TruContext Memory" on inject to avoid colliding with existing ## Memory sections.
 const MANAGED_START = '## TruContext Memory';
+const TC_API_HEADER = '## Memory';
 const MANAGED_END = '<!-- trucontext-openclaw managed — do not edit manually -->';
 
 /**
  * Inject or update the TC prompt fragment in an agent's AGENTS.md.
  * Returns { changed: bool, hash: string }
  */
-export function injectFragment(agentsPath, fragment) {
+export function injectFragment(agentsPath, rawFragment) {
+  // Normalize: if TC API returned "## Memory" header, rename to "## TruContext Memory"
+  // to avoid colliding with existing ## Memory sections in AGENTS.md files.
+  const fragment = rawFragment.startsWith(TC_API_HEADER + '\n')
+    ? MANAGED_START + rawFragment.slice(TC_API_HEADER.length)
+    : rawFragment;
+
   if (!fs.existsSync(agentsPath)) {
-    // Create the file with just the fragment
     fs.writeFileSync(agentsPath, `\n${fragment}\n`, 'utf8');
     return { changed: true, hash: hashFragment(fragment) };
   }
