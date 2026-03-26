@@ -22,7 +22,7 @@ import path from 'path';
 import { log, TC_HARVEST_LOG_PATH } from './utils.js';
 
 export const CRON_ID = 'trucontext-openclaw-maintenance';
-const CRON_NAME = 'TruContext — Daily Maintenance';
+export const CRON_NAME = 'TruContext — Daily Maintenance';
 const CRON_SCHEDULE = '0 2 * * *';
 const CRON_TZ = 'America/Chicago';
 const CRON_DESCRIPTION = 'TruContext: check for CLI updates and harvest agent doc changes';
@@ -182,11 +182,28 @@ export function unregisterCron() {
 // ---------------------------------------------------------------------------
 
 function _removeCronIfExists() {
+  // Try static ID first (jobs registered by this code)
   try {
     execSync(`openclaw cron rm ${CRON_ID} --json`, { encoding: 'utf8', stdio: 'pipe' });
-    log.debug(`Cron removed: ${CRON_ID}`);
+    log.debug(`Cron removed by static ID: ${CRON_ID}`);
+    return;
   } catch {
-    // Job didn't exist — that's fine
+    // Not found by static ID — fall through to name-based search
+  }
+
+  // Fallback: list all jobs and remove any matching our name (handles UUID-assigned IDs)
+  try {
+    const listJson = execSync('openclaw cron list --json', { encoding: 'utf8', stdio: 'pipe' });
+    const jobs = JSON.parse(listJson);
+    if (!Array.isArray(jobs)) return;
+    for (const job of jobs) {
+      if (job.name === CRON_NAME) {
+        execSync(`openclaw cron rm ${job.id} --json`, { encoding: 'utf8', stdio: 'pipe' });
+        log.debug(`Cron removed by name match: ${job.id}`);
+      }
+    }
+  } catch {
+    // No jobs or list failed — nothing to remove
   }
 }
 

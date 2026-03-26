@@ -9,7 +9,7 @@ import { execSync } from 'child_process';
 import { readState } from './state.js';
 import { checkAuth, getTcVersion, getLatestTcVersion } from './auth.js';
 import { discoverAgents } from './discover.js';
-import { CRON_ID } from './cron.js';
+import { CRON_ID, CRON_NAME } from './cron.js';
 import { log, TC_HARVEST_LOG_PATH } from './utils.js';
 
 export async function status() {
@@ -62,7 +62,7 @@ export async function status() {
     const cronJson = execSync(`openclaw cron list --json`, { encoding: 'utf8', stdio: 'pipe' });
     const jobs = JSON.parse(cronJson);
     const job = Array.isArray(jobs)
-      ? jobs.find(j => j.id === CRON_ID || j.name?.includes('TruContext'))
+      ? jobs.find(j => j.id === CRON_ID || j.name === CRON_NAME)
       : null;
     if (job) {
       log.info(`  ✓ Registered: ${job.name ?? CRON_ID}`);
