@@ -61,9 +61,8 @@ export async function status() {
   try {
     const cronJson = execSync(`openclaw cron list --json`, { encoding: 'utf8', stdio: 'pipe' });
     const jobs = JSON.parse(cronJson);
-    const job = Array.isArray(jobs)
-      ? jobs.find(j => j.id === CRON_ID || j.name === CRON_NAME)
-      : null;
+    const jobList = Array.isArray(jobs) ? jobs : (jobs?.jobs ?? []);
+    const job = jobList.find(j => j.id === CRON_ID || j.name === CRON_NAME);
     if (job) {
       log.info(`  ✓ Registered: ${job.name ?? CRON_ID}`);
       log.info(`    Schedule: ${job.schedule ?? job.cron ?? 'unknown'}`);

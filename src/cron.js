@@ -197,9 +197,13 @@ export function unregisterCron() {
 function _removeCronIfExists() {
   // Try static ID first (jobs registered by this code)
   try {
-    execSync(`openclaw cron rm ${CRON_ID} --json`, { encoding: 'utf8', stdio: 'pipe' });
-    log.debug(`Cron removed by static ID: ${CRON_ID}`);
-    return;
+    const rmOut = execSync(`openclaw cron rm ${CRON_ID} --json`, { encoding: 'utf8', stdio: 'pipe' });
+    const rmResult = JSON.parse(rmOut);
+    if (rmResult?.removed === true) {
+      log.debug(`Cron removed by static ID: ${CRON_ID}`);
+      return;
+    }
+    // removed: false means job wasn't found — fall through to name search
   } catch {
     // Not found by static ID — fall through to name-based search
   }
@@ -207,8 +211,9 @@ function _removeCronIfExists() {
   // Fallback: list all jobs and remove any matching our name (handles UUID-assigned IDs)
   try {
     const listJson = execSync('openclaw cron list --json', { encoding: 'utf8', stdio: 'pipe' });
-    const jobs = JSON.parse(listJson);
-    if (!Array.isArray(jobs)) return;
+    const parsed = JSON.parse(listJson);
+    // openclaw cron list --json returns { jobs: [...], total, offset }
+    const jobs = Array.isArray(parsed) ? parsed : (parsed?.jobs ?? []);
     for (const job of jobs) {
       if (job.name === CRON_NAME) {
         execSync(`openclaw cron rm ${job.id} --json`, { encoding: 'utf8', stdio: 'pipe' });
