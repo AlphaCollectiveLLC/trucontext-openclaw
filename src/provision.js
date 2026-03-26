@@ -54,7 +54,7 @@ export async function provisionOne({ agentId, reProvision = false, userRootNode,
     agent: {
       id: agent.id,
       name: agent.name,
-      role: agent.role,
+      role: agent.role ?? `${agent.name} OpenClaw agent`,
     },
     user: { root_node: userRootNode },
     content,
