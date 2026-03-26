@@ -1,0 +1,30 @@
+{
+  "name": "trucontext-openclaw",
+  "version": "0.1.0",
+  "description": "TruContext memory for OpenClaw — install once, works forever",
+  "type": "module",
+  "bin": {
+    "trucontext-openclaw": "./bin/cli.js"
+  },
+  "main": "./src/plugin.js",
+  "openclaw": {
+    "extensions": ["./src/plugin.js"]
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@sinclair/typebox": "^0.33.0",
+    "typescript": "^5.4.0"
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026.3.0"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": ["openclaw", "trucontext", "memory", "knowledge-graph", "ai-agents"],
+  "license": "MIT"
+}
