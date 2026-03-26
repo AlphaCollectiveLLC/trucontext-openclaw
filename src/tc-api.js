@@ -4,7 +4,6 @@
  * Wraps the TC CLI for all operations.
  * Also calls the TC REST API for the provision endpoint.
  *
- * NOTE: POST /v1/agents/provision must be built by the TC engineer.
  * Set TC_STUB_MODE=true for local development — returns mock responses.
  */
 
@@ -20,8 +19,8 @@ const STUB_MODE = process.env.TC_STUB_MODE === 'true';
 // ---------------------------------------------------------------------------
 
 /**
- * Provision an agent via POST /v1/agents/provision.
- * Returns a ProvisionResponse with root_node, wrapper_config, and prompt_fragment.
+ * Provision an agent via POST /v1/apps/{appId}/agents/provision.
+ * Returns { data: { agent_root, recipe_id, prompt_fragment, content_ingested, ... } }.
  */
 export async function provisionAgent({ agent, user, content, hints = {}, options = {} }) {
   if (STUB_MODE) {
@@ -44,7 +43,7 @@ export async function provisionAgent({ agent, user, content, hints = {}, options
     },
   };
 
-  log.debug(`provisionAgent: POST ${TC_API_BASE}/v1/agents/provision body=${JSON.stringify({ agent: body.agent })}`);
+  log.debug(`provisionAgent: POST ${TC_API_BASE}/v1/apps/${appId}/agents/provision body=${JSON.stringify({ agent: body.agent })}`);
 
   const res = await fetch(`${TC_API_BASE}/v1/apps/${appId}/agents/provision`, {
     method: 'POST',
