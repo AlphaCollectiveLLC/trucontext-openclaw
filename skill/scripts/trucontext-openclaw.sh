@@ -67,10 +67,12 @@ case "$VERB" in
     shift || true
     PERMANENT=false
     CONFIDENCE=""
+    ABOUT_NODE=""
     while [[ $# -gt 0 ]]; do
       case "$1" in
         --permanent) PERMANENT=true; shift ;;
         --confidence) CONFIDENCE="$2"; shift 2 ;;
+        --about) ABOUT_NODE="$2"; shift 2 ;;
         *) shift ;;
       esac
     done
@@ -79,6 +81,10 @@ case "$VERB" in
       --context "${ROOT_NODE}:BY"
       --context "${PRIMARY_ABOUT}:ABOUT"
     )
+    # If --about is provided, also link to that node (e.g. user root for user observations)
+    if [ -n "$ABOUT_NODE" ]; then
+      ARGS+=(--context "${ABOUT_NODE}:ABOUT")
+    fi
     if [ "$PERMANENT" = "true" ]; then
       ARGS+=(--no-temporal)
     fi
@@ -92,13 +98,15 @@ case "$VERB" in
     QUERY="${1:-recent context}"
     shift || true
     LIMIT=10
+    RECALL_ROOT="$ROOT_NODE"
     while [[ $# -gt 0 ]]; do
       case "$1" in
         --limit) LIMIT="$2"; shift 2 ;;
+        --root)  RECALL_ROOT="$2"; shift 2 ;;
         *) shift ;;
       esac
     done
-    trucontext recall "$QUERY" --root "$ROOT_NODE" --limit "$LIMIT"
+    trucontext recall "$QUERY" --root "$RECALL_ROOT" --limit "$LIMIT"
     ;;
 
   query)

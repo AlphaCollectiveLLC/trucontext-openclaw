@@ -42,6 +42,41 @@ tc-memory node get <id>
 tc-memory node link <id> --rel <RELATIONSHIP> --to <id2>
 ```
 
+## Your user
+
+Your AGENTS.md fragment tells you your user's root node ID (e.g. `User root: dustin`).
+This is the person you serve. Use it to recall what you know about them and to link
+observations about them to their node.
+
+**Recall what you know about your user:**
+```bash
+tc-memory recall "preferences, communication style, and priorities" --root <user_root>
+tc-memory recall "what decisions has my user made recently" --root <user_root>
+tc-memory recall "what frustrates or energizes my user" --root <user_root>
+```
+
+**Ingest an observation about your user** (link it to their node):
+```bash
+tc-memory ingest "<narrative about user>" --about <user_root>
+```
+Use this when you observe something significant about how your user thinks, decides,
+communicates, or reacts — not just what they asked you to do.
+
+**Create a user root node** (only if one doesn't exist — check first):
+```bash
+tc-memory node find "<user name>"
+# If no match with confidence > 0.8:
+tc-memory node create --type Person --id <slug> --name "<Full Name>"
+```
+After creating, tell your user: "I've created your root node as `<id>`. 
+Re-run `trucontext-openclaw install` to register it."
+
+**Link yourself to your user:**
+```bash
+tc-memory node link <your_root_node> --rel SERVES --to <user_root>
+```
+Do this once after install if the relationship isn't already in your graph.
+
 ## Node integrity rule
 
 **Always call `node find` before `node create`.** If a match is returned with confidence > 0.8, use the existing node ID. Only create if no match found. This prevents duplicate nodes across sessions.
