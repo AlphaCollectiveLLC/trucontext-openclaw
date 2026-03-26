@@ -2,51 +2,57 @@
  * AGENTS.md prompt fragment injection
  *
  * Appends (or updates) a managed TruContext memory section in an agent's AGENTS.md.
- * Uses HTML comment markers to identify the managed block.
+ * Uses HTML comment fence markers to identify the managed block — both start and end
+ * are written on inject, so removeFragment can always find and cleanly remove the block
+ * regardless of what else is in the file.
+ *
+ * Fence format:
+ *   <!-- trucontext-openclaw:start -->
+ *   ## TruContext Memory
+ *   ...TC-generated content...
+ *   <!-- trucontext-openclaw:end -->
  */
 
 import fs from 'fs';
 import crypto from 'crypto';
 
+const FENCE_START = '<!-- trucontext-openclaw:start -->';
+const FENCE_END   = '<!-- trucontext-openclaw:end -->';
+
 // TC API currently returns "## Memory" as the fragment header.
-// We detect both "## Memory" (TC-generated) and "## TruContext Memory" (our preferred header)
-// and normalize to "## TruContext Memory" on inject to avoid colliding with existing ## Memory sections.
-const MANAGED_START = '## TruContext Memory';
+// Normalize to "## TruContext Memory" to avoid colliding with existing ## Memory sections.
 const TC_API_HEADER = '## Memory';
-const MANAGED_END = '<!-- trucontext-openclaw managed — do not edit manually -->';
+const NORMALIZED_HEADER = '## TruContext Memory';
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
 
 /**
  * Inject or update the TC prompt fragment in an agent's AGENTS.md.
+ * Always writes content wrapped in fence markers.
  * Returns { changed: bool, hash: string }
  */
 export function injectFragment(agentsPath, rawFragment) {
-  // Normalize: if TC API returned "## Memory" header, rename to "## TruContext Memory"
-  // to avoid colliding with existing ## Memory sections in AGENTS.md files.
-  const fragment = rawFragment.startsWith(TC_API_HEADER + '\n')
-    ? MANAGED_START + rawFragment.slice(TC_API_HEADER.length)
-    : rawFragment;
+  const fragment = _normalizeHeader(rawFragment);
+  const fenced = _fence(fragment);
+  const newHash = hashFragment(fragment);
 
   if (!fs.existsSync(agentsPath)) {
-    fs.writeFileSync(agentsPath, `\n${fragment}\n`, 'utf8');
-    return { changed: true, hash: hashFragment(fragment) };
+    fs.writeFileSync(agentsPath, `\n${fenced}\n`, 'utf8');
+    return { changed: true, hash: newHash };
   }
 
   const current = fs.readFileSync(agentsPath, 'utf8');
   const existing = extractFragment(current);
-  const newHash = hashFragment(fragment);
 
   if (existing && hashFragment(existing) === newHash) {
     return { changed: false, hash: newHash };
   }
 
-  let updated;
-  if (existing) {
-    // Replace existing managed block
-    updated = replaceManagedBlock(current, fragment);
-  } else {
-    // Append to end of file
-    updated = current.trimEnd() + '\n\n' + fragment + '\n';
-  }
+  const updated = existing
+    ? _replaceManagedBlock(current, fenced)
+    : current.trimEnd() + '\n\n' + fenced + '\n';
 
   fs.writeFileSync(agentsPath, updated, 'utf8');
   return { changed: true, hash: newHash };
@@ -54,45 +60,70 @@ export function injectFragment(agentsPath, rawFragment) {
 
 /**
  * Remove the managed TC block from an agent's AGENTS.md.
+ * Returns { removed: bool } — false if no fenced block was found.
  */
 export function removeFragment(agentsPath) {
-  if (!fs.existsSync(agentsPath)) return;
+  if (!fs.existsSync(agentsPath)) return { removed: false };
   const current = fs.readFileSync(agentsPath, 'utf8');
-  const cleaned = removeManagedBlock(current);
+  if (!_hasFence(current)) return { removed: false };
+  const cleaned = _removeManagedBlock(current);
   fs.writeFileSync(agentsPath, cleaned, 'utf8');
+  return { removed: true };
 }
 
 /**
- * Extract the current managed fragment from AGENTS.md content.
- * Returns the fragment string or null if not present.
+ * Extract the inner content of the managed block (without fence markers).
+ * Returns the fragment string or null if no fenced block is present.
  */
 export function extractFragment(content) {
-  const startIdx = content.indexOf(MANAGED_START);
-  const endIdx = content.indexOf(MANAGED_END);
+  const startIdx = content.indexOf(FENCE_START);
+  const endIdx   = content.indexOf(FENCE_END);
   if (startIdx === -1 || endIdx === -1) return null;
-  return content.slice(startIdx, endIdx + MANAGED_END.length).trim();
+  // Return only the inner content between the fence lines
+  const inner = content.slice(startIdx + FENCE_START.length, endIdx);
+  return inner.trim();
 }
 
-// --- Internal ---
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
 
-function replaceManagedBlock(content, newFragment) {
-  const startIdx = content.indexOf(MANAGED_START);
-  const endIdx = content.indexOf(MANAGED_END) + MANAGED_END.length;
-  // Consume trailing newline if present
+function _normalizeHeader(raw) {
+  return raw.startsWith(TC_API_HEADER + '\n')
+    ? NORMALIZED_HEADER + raw.slice(TC_API_HEADER.length)
+    : raw;
+}
+
+function _fence(fragment) {
+  return `${FENCE_START}\n${fragment.trim()}\n${FENCE_END}`;
+}
+
+function _hasFence(content) {
+  return content.includes(FENCE_START) && content.includes(FENCE_END);
+}
+
+function _replaceManagedBlock(content, newFenced) {
+  const startIdx = content.indexOf(FENCE_START);
+  const endIdx   = content.indexOf(FENCE_END) + FENCE_END.length;
   const afterEnd = content[endIdx] === '\n' ? endIdx + 1 : endIdx;
-  return content.slice(0, startIdx).trimEnd() + '\n\n' + newFragment + '\n' + content.slice(afterEnd);
+  return (
+    content.slice(0, startIdx).trimEnd() +
+    '\n\n' +
+    newFenced +
+    '\n' +
+    content.slice(afterEnd)
+  );
 }
 
-function removeManagedBlock(content) {
-  const startIdx = content.indexOf(MANAGED_START);
-  const endIdx = content.indexOf(MANAGED_END);
-  if (startIdx === -1 || endIdx === -1) return content;
-  const afterEnd = endIdx + MANAGED_END.length;
+function _removeManagedBlock(content) {
+  const startIdx = content.indexOf(FENCE_START);
+  const endIdx   = content.indexOf(FENCE_END) + FENCE_END.length;
+  const afterEnd = content[endIdx] === '\n' ? endIdx + 1 : endIdx;
   const before = content.slice(0, startIdx).trimEnd();
-  const after = content.slice(afterEnd).replace(/^\n+/, '');
+  const after  = content.slice(afterEnd).replace(/^\n+/, '');
   return before + (after ? '\n\n' + after : '\n');
 }
 
-function hashFragment(fragment) {
+export function hashFragment(fragment) {
   return crypto.createHash('sha256').update(fragment).digest('hex').slice(0, 16);
 }

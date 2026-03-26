@@ -1,5 +1,8 @@
 /**
  * Uninstall flow — non-destructive, graph data preserved
+ *
+ * Each step is wrapped independently — a failure in one step does not
+ * abort the rest. All results are collected and reported at the end.
  */
 
 import fs from 'fs';
@@ -19,7 +22,7 @@ export async function uninstall({ args = [] } = {}) {
 
   log.info('This will:\n');
   log.info('  • Remove the tc-memory skill from your workspace');
-  log.info('  • Remove TruContext references from each agent\'s AGENTS.md');
+  log.info('  • Remove TruContext fenced blocks from each agent\'s AGENTS.md');
   log.info('  • Unregister the daily cron job');
   log.info('  • Delete the local state file\n');
   log.info('  Your TruContext graph data is PRESERVED.');
@@ -31,39 +34,84 @@ export async function uninstall({ args = [] } = {}) {
   }
 
   const state = readState();
+  const errors = [];
 
+  // ── Step 1: Remove AGENTS.md fragments ──────────────────────────────────
   log.info('\n── Removing AGENTS.md fragments ───────────────────────');
-  for (const agent of discoverAgents()) {
-    if (fs.existsSync(agent.agentsPath)) {
-      removeFragment(agent.agentsPath);
-      log.info(`  ✓ ${agent.name} (${agent.id})`);
+  try {
+    for (const agent of discoverAgents()) {
+      if (!fs.existsSync(agent.agentsPath)) continue;
+      try {
+        const { removed } = removeFragment(agent.agentsPath);
+        if (removed) {
+          log.info(`  ✓ ${agent.name} (${agent.id})`);
+        } else {
+          log.info(`  → ${agent.name} (${agent.id}): no managed block found, skipping`);
+        }
+      } catch (err) {
+        log.warn(`  ✗ ${agent.name} (${agent.id}): ${err.message}`);
+        errors.push(`AGENTS.md remove failed for ${agent.id}: ${err.message}`);
+      }
     }
+  } catch (err) {
+    log.warn(`  ✗ Could not discover agents: ${err.message}`);
+    errors.push(`Agent discovery failed: ${err.message}`);
   }
 
+  // ── Step 2: Remove tc-memory skill ──────────────────────────────────────
   log.info('\n── Removing tc-memory skill ────────────────────────────');
-  const skillDir = state.workspace_root
-    ? path.join(state.workspace_root, 'skills', 'tc-memory')
-    : null;
-  if (skillDir && fs.existsSync(skillDir)) {
-    fs.rmSync(skillDir, { recursive: true });
-    log.info(`  ✓ Removed: ${skillDir}`);
-  } else {
-    log.info('  → Skill not found, skipping');
+  try {
+    const skillDir = state.workspace_root
+      ? path.join(state.workspace_root, 'skills', 'tc-memory')
+      : null;
+    if (skillDir && fs.existsSync(skillDir)) {
+      fs.rmSync(skillDir, { recursive: true });
+      log.info(`  ✓ Removed: ${skillDir}`);
+    } else {
+      log.info('  → Skill not found, skipping');
+    }
+  } catch (err) {
+    log.warn(`  ✗ Could not remove skill: ${err.message}`);
+    errors.push(`Skill removal failed: ${err.message}`);
   }
 
+  // ── Step 3: Unregister cron ──────────────────────────────────────────────
   log.info('\n── Unregistering cron ──────────────────────────────────');
-  unregisterCron();
-  log.info('  ✓ Cron removed');
-
-  log.info('\n── Deleting state file ─────────────────────────────────');
-  const sp = statePath();
-  if (fs.existsSync(sp)) {
-    fs.unlinkSync(sp);
-    log.info(`  ✓ Deleted: ${sp}`);
+  try {
+    unregisterCron();
+    log.info('  ✓ Cron removed');
+  } catch (err) {
+    log.warn(`  ✗ Could not unregister cron: ${err.message}`);
+    errors.push(`Cron unregister failed: ${err.message}`);
   }
 
-  log.info('\n╔════════════════════════════════════════════════════╗');
-  log.info('║   ✓ TruContext removed from OpenClaw               ║');
-  log.info('╚════════════════════════════════════════════════════╝\n');
-  log.info('Your TC graph data is untouched at trucontext.ai\n');
+  // ── Step 4: Delete state file ────────────────────────────────────────────
+  log.info('\n── Deleting state file ─────────────────────────────────');
+  try {
+    const sp = statePath();
+    if (fs.existsSync(sp)) {
+      fs.unlinkSync(sp);
+      log.info(`  ✓ Deleted: ${sp}`);
+    } else {
+      log.info('  → State file not found, skipping');
+    }
+  } catch (err) {
+    log.warn(`  ✗ Could not delete state file: ${err.message}`);
+    errors.push(`State file deletion failed: ${err.message}`);
+  }
+
+  // ── Summary ──────────────────────────────────────────────────────────────
+  if (errors.length > 0) {
+    log.info('\n╔════════════════════════════════════════════════════╗');
+    log.info('║   ⚠ Uninstall completed with warnings              ║');
+    log.info('╚════════════════════════════════════════════════════╝\n');
+    log.warn('The following steps had errors:');
+    for (const e of errors) log.warn(`  • ${e}`);
+    log.info('\nYour TC graph data is untouched at trucontext.ai\n');
+  } else {
+    log.info('\n╔════════════════════════════════════════════════════╗');
+    log.info('║   ✓ TruContext removed from OpenClaw               ║');
+    log.info('╚════════════════════════════════════════════════════╝\n');
+    log.info('Your TC graph data is untouched at trucontext.ai\n');
+  }
 }
