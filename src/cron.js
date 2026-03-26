@@ -124,7 +124,8 @@ export function registerCron({ alertChannel = 'slack', alertTo = null } = {}) {
   // Remove any stale registration first (idempotent)
   _removeCronIfExists();
 
-  const args = [
+  // Step 1: Register the job
+  const addArgs = [
     'openclaw', 'cron', 'add',
     '--name', CRON_NAME,
     '--cron', CRON_SCHEDULE,
@@ -133,28 +134,40 @@ export function registerCron({ alertChannel = 'slack', alertTo = null } = {}) {
     '--agent', 'main',
     '--message', 'trucontext-openclaw sync',
     '--description', CRON_DESCRIPTION,
+    '--json',
+  ];
+
+  let assignedId;
+  try {
+    const result = execSync(addArgs.join(' '), { encoding: 'utf8' });
+    const parsed = JSON.parse(result);
+    assignedId = parsed?.id ?? CRON_ID;
+    log.debug(`Cron registered: ${assignedId}`);
+  } catch (err) {
+    throw new Error(`Failed to register cron via openclaw CLI: ${err.message}`);
+  }
+
+  // Step 2: Apply failure alerts via cron edit
+  // (--failure-alert-* flags are only available on `cron edit`, not `cron add`)
+  const editArgs = [
+    'openclaw', 'cron', 'edit', assignedId,
     '--failure-alert',
     '--failure-alert-channel', alertChannel,
     '--failure-alert-after', '2',
     '--failure-alert-cooldown', '6h',
-    '--json',
   ];
-
-  // If a delivery target was provided (e.g. "#halbot"), wire it up
   if (alertTo) {
-    args.push('--failure-alert-to', alertTo);
+    editArgs.push('--failure-alert-to', alertTo);
+  }
+  try {
+    execSync(editArgs.join(' '), { encoding: 'utf8', stdio: 'pipe' });
+    log.debug(`Failure alerts configured for cron: ${assignedId}`);
+  } catch (err) {
+    // Non-fatal: cron is registered, alerts just won't fire
+    log.warn(`Could not configure failure alerts for cron (non-fatal): ${err.message}`);
   }
 
-  try {
-    const result = execSync(args.join(' '), { encoding: 'utf8' });
-    const parsed = JSON.parse(result);
-    // openclaw cron add --json returns the created job; capture the assigned id
-    const assignedId = parsed?.id ?? CRON_ID;
-    log.debug(`Cron registered: ${assignedId}`);
-    return assignedId;
-  } catch (err) {
-    throw new Error(`Failed to register cron via openclaw CLI: ${err.message}`);
-  }
+  return assignedId;
 }
 
 /**
