@@ -6,7 +6,7 @@
 
 import { discoverAgents } from './discover.js';
 import { harvestAgent, harvestDelta, getFileMtimeMap } from './harvest.js';
-import { provisionAgent } from './tc-api.js';
+import { provisionAgent, AuthExpiredError } from './tc-api.js';
 import { injectFragment } from './inject.js';
 import { readState, registerAgent } from './state.js';
 import { getTcVersion } from './auth.js';
@@ -124,7 +124,12 @@ export async function provisionAll({ userRootNode, dryRun = false, verbose = fal
       });
       results.push({ agentId: agent.id, ...result });
     } catch (err) {
-      console.error(`  ✗ Failed to provision ${agent.id}: ${err.message}`);
+      if (err instanceof AuthExpiredError) {
+        console.error(`  ✗ ${err.message}`);
+        console.error(`     Run: npx trucontext login`);
+      } else {
+        console.error(`  ✗ Failed to provision ${agent.id}: ${err.message}`);
+      }
       results.push({ agentId: agent.id, error: err.message });
     }
   }

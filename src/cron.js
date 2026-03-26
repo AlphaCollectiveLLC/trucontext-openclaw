@@ -18,6 +18,7 @@ import { harvestDelta } from './harvest.js';
 import { provisionOne } from './provision.js';
 import { installSkill } from './skill.js';
 import { getTcVersion, getLatestTcVersion, updateTc } from './auth.js';
+import { AuthExpiredError } from './tc-api.js';
 import path from 'path';
 import { log, TC_HARVEST_LOG_PATH } from './utils.js';
 
@@ -93,6 +94,14 @@ export async function sync({ verbose = false } = {}) {
 
       logEntries.push(`${ts} — ${agent.name}: ${delta.changedFiles.join(', ')} changed, re-ingested (~${wordCount} words)`);
     } catch (err) {
+      if (err instanceof AuthExpiredError) {
+        const msg = `TruContext auth expired — memory sync paused. Run: npx trucontext login`;
+        logEntries.push(`${ts} — AUTH EXPIRED: ${msg}`);
+        log.error(msg);
+        _alertAuthExpired(msg);
+        // Auth is global — no point retrying other agents
+        break;
+      }
       logEntries.push(`${ts} — ${agent.name}: re-provision FAILED: ${err.message}`);
       log.error(`Re-provision failed for ${agent.id}: ${err.message}`);
     }
@@ -215,4 +224,20 @@ function appendHarvestLog(entries) {
   const dir = path.dirname(TC_HARVEST_LOG_PATH);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   fs.appendFileSync(TC_HARVEST_LOG_PATH, entries.join('\n') + '\n', 'utf8');
+}
+
+/**
+ * Push an auth-expired alert to the main OpenClaw agent session via system event.
+ * This surfaces the issue in the agent's next turn rather than silently logging it.
+ */
+function _alertAuthExpired(message) {
+  try {
+    spawnSync('openclaw', [
+      'system', 'event',
+      '--text', `⚠️ TruContext memory sync failed: ${message}`,
+      '--mode', 'now',
+    ], { encoding: 'utf8' });
+  } catch {
+    // Non-fatal — the harvest log already recorded it
+  }
 }
