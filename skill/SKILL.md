@@ -11,6 +11,11 @@ Never call the `trucontext` CLI directly — use the `tc-memory` verbs below.
 
 If `tc-memory` is not found, run: `trucontext-openclaw install`
 
+## What this skill reads
+
+- **`~/.trucontext/openclaw-state.json`** — agent config written by `trucontext-openclaw install`. Contains your root node ID, user root node ID, recipe, and workspace path. No secrets.
+- **TruContext CLI auth** (`~/.trucontext/credentials.json`) — the `trucontext` CLI manages its own auth tokens. This skill calls the CLI; it does not read or store credentials directly. To authenticate, run: `npx trucontext login`.
+
 ## Verbs
 
 ```bash
