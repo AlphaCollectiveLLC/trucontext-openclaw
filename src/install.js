@@ -87,10 +87,10 @@ export async function install({ args = [] } = {}) {
     try {
       await provisionOne({ agentId: agent.id, userRootNode, dryRun, verbose: true });
       // Sync IDENTITY.md into OpenClaw's agent registry
-      if (!dryRun && agent.workspaceDir) {
+      if (!dryRun && agent.workspace) {
         try {
           execSync(
-            `openclaw agents set-identity --agent ${agent.id} --from-identity --workspace ${agent.workspaceDir}`,
+            `openclaw agents set-identity --agent ${agent.id} --from-identity --workspace ${agent.workspace}`,
             { encoding: 'utf8', stdio: 'pipe' }
           );
           log.debug(`  ✓ Identity synced for ${agent.id}`);
@@ -104,21 +104,26 @@ export async function install({ args = [] } = {}) {
     }
   }
 
-  log.info('\n── Step 7: Install tc-memory Skill ────────────────────');
+  log.info('\n── Step 7: Install trucontext-openclaw Skill ──────────');
   if (!dryRun) {
-    const { method } = await installSkill(workspaceRoot);
+    const { method } = await installSkill();
     if (method === 'clawhub') {
-      log.info('  ✓ Skill installed via ClawHub (managed)');
+      log.info('  ✓ Skill installed via ClawHub into ~/.openclaw/skills (managed)');
     } else {
-      log.info(`  ✓ Skill installed from bundled template: ${workspaceRoot}/skills/tc-memory/`);
-      log.info('  ⚠ Not tracked by openclaw skills — publish to ClawHub to enable managed installs');
+      log.info('  ✓ Skill installed from bundled template into ~/.openclaw/skills');
+      log.info('  ⚠ Not tracked by openclaw skills — will upgrade to managed once published to ClawHub');
     }
   }
 
   log.info('\n── Step 8: Register Daily Cron ────────────────────────');
   if (!dryRun) {
-    registerCron({ alertChannel: 'slack' });
-    log.info('  ✓ Cron registered via openclaw CLI (daily at 2am, failure alerts enabled)');
+    try {
+      registerCron({ alertChannel: 'slack' });
+      log.info('  ✓ Cron registered via openclaw CLI (daily at 2am, failure alerts enabled)');
+    } catch (err) {
+      log.warn(`  ⚠ Cron registration failed (non-fatal): ${err.message}`);
+      log.warn('  Run manually: openclaw cron add --name "TruContext — Daily Maintenance" --cron "0 2 * * *" --session isolated --agent main --message "trucontext-openclaw sync"');
+    }
   }
 
   log.info('\n── Step 9: Save State ─────────────────────────────────');
@@ -136,7 +141,7 @@ export async function install({ args = [] } = {}) {
   log.info('\n╔════════════════════════════════════════════════════╗');
   log.info('║   ✓ TruContext memory is active for all agents     ║');
   log.info('╚════════════════════════════════════════════════════╝\n');
-  log.info('Agents now have access to the tc-memory skill.');
+  log.info('Agents now have access to the trucontext-openclaw skill.');
   log.info('The daily cron will keep everything current.\n');
 }
 
