@@ -11,13 +11,14 @@
  */
 
 import fs from 'fs';
-import { execSync } from 'child_process';
+import { execSync, spawnSync } from 'child_process';
 import { readState, updateState } from './state.js';
 import { discoverAgents } from './discover.js';
 import { harvestDelta } from './harvest.js';
 import { provisionOne } from './provision.js';
 import { installSkill } from './skill.js';
 import { getTcVersion, getLatestTcVersion, updateTc } from './auth.js';
+import { AuthExpiredError } from './tc-api.js';
 import path from 'path';
 import { log, TC_HARVEST_LOG_PATH } from './utils.js';
 
@@ -93,6 +94,14 @@ export async function sync({ verbose = false } = {}) {
 
       logEntries.push(`${ts} — ${agent.name}: ${delta.changedFiles.join(', ')} changed, re-ingested (~${wordCount} words)`);
     } catch (err) {
+      if (err instanceof AuthExpiredError) {
+        const msg = `TruContext auth expired — memory sync paused. Run: npx trucontext login`;
+        logEntries.push(`${ts} — AUTH EXPIRED: ${msg}`);
+        log.error(msg);
+        _alertAuthExpired(msg);
+        // Auth is global — no point retrying other agents
+        break;
+      }
       logEntries.push(`${ts} — ${agent.name}: re-provision FAILED: ${err.message}`);
       log.error(`Re-provision failed for ${agent.id}: ${err.message}`);
     }
@@ -125,8 +134,10 @@ export function registerCron({ alertChannel = 'slack', alertTo = null } = {}) {
   _removeCronIfExists();
 
   // Step 1: Register the job
+  // Use spawnSync with arg array — avoids shell splitting on spaces in values
+  // like CRON_NAME ("TruContext — Daily Maintenance") and CRON_DESCRIPTION.
   const addArgs = [
-    'openclaw', 'cron', 'add',
+    'cron', 'add',
     '--name', CRON_NAME,
     '--cron', CRON_SCHEDULE,
     '--tz', CRON_TZ,
@@ -139,8 +150,9 @@ export function registerCron({ alertChannel = 'slack', alertTo = null } = {}) {
 
   let assignedId;
   try {
-    const result = execSync(addArgs.join(' '), { encoding: 'utf8' });
-    const parsed = JSON.parse(result);
+    const result = spawnSync('openclaw', addArgs, { encoding: 'utf8' });
+    if (result.status !== 0) throw new Error(result.stderr || 'non-zero exit');
+    const parsed = JSON.parse(result.stdout);
     assignedId = parsed?.id ?? CRON_ID;
     log.debug(`Cron registered: ${assignedId}`);
   } catch (err) {
@@ -150,7 +162,7 @@ export function registerCron({ alertChannel = 'slack', alertTo = null } = {}) {
   // Step 2: Apply failure alerts via cron edit
   // (--failure-alert-* flags are only available on `cron edit`, not `cron add`)
   const editArgs = [
-    'openclaw', 'cron', 'edit', assignedId,
+    'cron', 'edit', assignedId,
     '--failure-alert',
     '--failure-alert-channel', alertChannel,
     '--failure-alert-after', '2',
@@ -160,7 +172,8 @@ export function registerCron({ alertChannel = 'slack', alertTo = null } = {}) {
     editArgs.push('--failure-alert-to', alertTo);
   }
   try {
-    execSync(editArgs.join(' '), { encoding: 'utf8', stdio: 'pipe' });
+    const editResult = spawnSync('openclaw', editArgs, { encoding: 'utf8' });
+    if (editResult.status !== 0) throw new Error(editResult.stderr || 'non-zero exit');
     log.debug(`Failure alerts configured for cron: ${assignedId}`);
   } catch (err) {
     // Non-fatal: cron is registered, alerts just won't fire
@@ -211,4 +224,20 @@ function appendHarvestLog(entries) {
   const dir = path.dirname(TC_HARVEST_LOG_PATH);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   fs.appendFileSync(TC_HARVEST_LOG_PATH, entries.join('\n') + '\n', 'utf8');
+}
+
+/**
+ * Push an auth-expired alert to the main OpenClaw agent session via system event.
+ * This surfaces the issue in the agent's next turn rather than silently logging it.
+ */
+function _alertAuthExpired(message) {
+  try {
+    spawnSync('openclaw', [
+      'system', 'event',
+      '--text', `⚠️ TruContext memory sync failed: ${message}`,
+      '--mode', 'now',
+    ], { encoding: 'utf8' });
+  } catch {
+    // Non-fatal — the harvest log already recorded it
+  }
 }

@@ -56,6 +56,9 @@ export async function provisionAgent({ agent, user, content, hints = {}, options
 
   if (!res.ok) {
     const errText = await res.text();
+    if (res.status === 401 || res.status === 403) {
+      throw new AuthExpiredError(`TC auth expired or invalid. Run: npx trucontext login`);
+    }
     throw new Error(`TC provision failed (${res.status}): ${errText}`);
   }
 
@@ -143,9 +146,23 @@ function tc(args) {
   const result = spawnSync('trucontext', args, { encoding: 'utf8' });
   if (result.status !== 0 || result.error) {
     const msg = (result.stderr || result.stdout || result.error?.message || 'unknown error').trim();
+    if (/unauthorized|unauthenticated|401|403|token.*expired|not logged in/i.test(msg)) {
+      throw new AuthExpiredError(`TC auth expired or invalid. Run: npx trucontext login`);
+    }
     throw new Error(`trucontext ${args[0]} failed: ${msg}`);
   }
   return result.stdout.trim();
+}
+
+/**
+ * Sentinel error class for TC auth failures.
+ * Callers can check `err instanceof AuthExpiredError` to surface targeted recovery advice.
+ */
+export class AuthExpiredError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'AuthExpiredError';
+  }
 }
 
 // ---------------------------------------------------------------------------

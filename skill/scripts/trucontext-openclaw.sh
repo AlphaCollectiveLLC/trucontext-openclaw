@@ -19,6 +19,24 @@ set -euo pipefail
 
 STATE_FILE="$HOME/.trucontext/openclaw-state.json"
 
+# Wrapper around trucontext CLI that detects auth errors and surfaces
+# a clear recovery message instead of a raw CLI error.
+tc() {
+  local output
+  local exit_code
+  output=$(trucontext "$@" 2>&1) && exit_code=$? || exit_code=$?
+  if [ $exit_code -ne 0 ]; then
+    if echo "$output" | grep -qiE "unauthorized|unauthenticated|token.*expired|not logged in|401|403"; then
+      echo "ERROR: TruContext auth expired or invalid." >&2
+      echo "Run: npx trucontext login" >&2
+      exit 1
+    fi
+    echo "$output" >&2
+    exit $exit_code
+  fi
+  echo "$output"
+}
+
 # --- Resolve agent config ---
 # Try to detect which agent is calling based on CWD matching workspace paths
 resolve_config() {
@@ -85,7 +103,7 @@ case "$VERB" in
     if [ -n "$CONFIDENCE" ]; then
       ARGS+=(--confidence "$CONFIDENCE")
     fi
-    trucontext "${ARGS[@]}"
+    tc "${ARGS[@]}"
     ;;
 
   recall)
@@ -98,7 +116,7 @@ case "$VERB" in
         *) shift ;;
       esac
     done
-    trucontext recall "$QUERY" --root "$ROOT_NODE" --limit "$LIMIT"
+    tc recall "$QUERY" --root "$ROOT_NODE" --limit "$LIMIT"
     ;;
 
   query)
@@ -111,15 +129,15 @@ case "$VERB" in
         *) shift ;;
       esac
     done
-    trucontext query "$QUESTION" --root "$ROOT_NODE" --limit "$LIMIT"
+    tc query "$QUESTION" --root "$ROOT_NODE" --limit "$LIMIT"
     ;;
 
   gaps)
-    trucontext curiosity list --root "$ROOT_NODE"
+    tc curiosity list --root "$ROOT_NODE"
     ;;
 
   health)
-    trucontext mind thoughts --limit 3
+    tc mind thoughts --limit 3
     ;;
 
   node)
@@ -128,7 +146,7 @@ case "$VERB" in
     case "$SUBCMD" in
       find)
         QUERY="${1:-}"
-        trucontext graph search "$QUERY"
+        tc graph search "$QUERY"
         ;;
       create)
         TYPE="" ID="" NAME="" PERMANENT=false
@@ -145,11 +163,11 @@ case "$VERB" in
           --properties "{\"name\":\"$NAME\"}"
           --context "${ROOT_NODE}:ABOUT"
         )
-        trucontext "${ARGS[@]}"
+        tc "${ARGS[@]}"
         ;;
       get)
         NODE_ID="${1:-}"
-        trucontext entities get "$NODE_ID"
+        tc entities get "$NODE_ID"
         ;;
       link)
         FROM_ID="${1:-}"
@@ -166,7 +184,7 @@ case "$VERB" in
         # Currently, TC CLI `entities edges` is list-only — no create command exists.
         # Workaround: ingest the relationship as content. TC's intelligence layer will
         # detect and formalize the edge during entity-linking dream cycles.
-        trucontext ingest "Relationship declared: ${FROM_ID} ${REL} ${TO_ID}" \
+        tc ingest "Relationship declared: ${FROM_ID} ${REL} ${TO_ID}" \
           --context "${FROM_ID}:ABOUT" \
           --context "${TO_ID}:ABOUT" \
           --context "${ROOT_NODE}:BY" \
