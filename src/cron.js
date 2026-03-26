@@ -207,8 +207,9 @@ function _removeCronIfExists() {
   // Fallback: list all jobs and remove any matching our name (handles UUID-assigned IDs)
   try {
     const listJson = execSync('openclaw cron list --json', { encoding: 'utf8', stdio: 'pipe' });
-    const jobs = JSON.parse(listJson);
-    if (!Array.isArray(jobs)) return;
+    const parsed = JSON.parse(listJson);
+    // openclaw cron list --json returns { jobs: [...], total, offset }
+    const jobs = Array.isArray(parsed) ? parsed : (parsed?.jobs ?? []);
     for (const job of jobs) {
       if (job.name === CRON_NAME) {
         execSync(`openclaw cron rm ${job.id} --json`, { encoding: 'utf8', stdio: 'pipe' });
