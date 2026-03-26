@@ -1,12 +1,15 @@
 ---
-name: tc-memory
-description: TruContext knowledge graph memory wrapper. Use when you need to remember something significant, recall prior context, query the graph, check what TC is curious about, or declare a new entity node. This is your persistent memory layer — it survives across sessions. Triggers on: "remember this", "recall what we know about", "check TC", "what has TC flagged", "create a node for", "find the node for".
+name: trucontext-openclaw
+description: "TruContext persistent memory for OpenClaw agents. Use when you need to remember something significant across sessions, recall prior context, query the knowledge graph, check what TC is curious about, or declare entity nodes. Triggers on: 'remember this', 'recall what we know about', 'check TC', 'what has TC flagged', 'create a node for', 'find the node for'."
+metadata: {"openclaw": {"emoji": "🧠", "requires": {"bins": ["trucontext"]}, "install": [{"id": "npm-trucontext-openclaw", "kind": "node", "package": "trucontext-openclaw", "bins": ["trucontext-openclaw"], "label": "Install trucontext-openclaw (npm) — includes TC CLI setup"}]}}
 ---
 
-# tc-memory
+# trucontext-openclaw
 
-Your interface to TruContext. All TC operations go through this skill.
-Never call the `trucontext` CLI directly — use these verbs.
+Your persistent memory layer. All TC operations go through this skill.
+Never call the `trucontext` CLI directly — use the `tc-memory` verbs below.
+
+If `tc-memory` is not found, run: `trucontext-openclaw install`
 
 ## Verbs
 
@@ -80,5 +83,5 @@ Examples of good vs. bad ingests:
 
 ## Config (resolved from ~/.trucontext/openclaw-state.json)
 
-Your root node, user root, recipe, and primary_about are pre-configured.
+Your root node, user root, recipe, and primary_about are pre-configured by `trucontext-openclaw install`.
 You do not need to pass them on every call.

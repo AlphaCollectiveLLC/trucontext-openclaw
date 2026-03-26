@@ -1,6 +1,6 @@
 {
   "name": "trucontext-openclaw",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "TruContext memory for OpenClaw — install once, works forever",
   "type": "module",
   "bin": {

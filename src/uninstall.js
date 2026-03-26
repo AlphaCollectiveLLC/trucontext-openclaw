@@ -6,11 +6,11 @@
  */
 
 import fs from 'fs';
-import path from 'path';
 import { readState, statePath } from './state.js';
 import { removeFragment } from './inject.js';
 import { discoverAgents } from './discover.js';
 import { unregisterCron } from './cron.js';
+import { removeSkill } from './skill.js';
 import { log, confirm } from './utils.js';
 
 export async function uninstall({ args = [] } = {}) {
@@ -58,18 +58,11 @@ export async function uninstall({ args = [] } = {}) {
     errors.push(`Agent discovery failed: ${err.message}`);
   }
 
-  // ── Step 2: Remove tc-memory skill ──────────────────────────────────────
-  log.info('\n── Removing tc-memory skill ────────────────────────────');
+  // ── Step 2: Remove skill ─────────────────────────────────────────────────
+  log.info('\n── Removing trucontext-openclaw skill ──────────────────');
   try {
-    const skillDir = state.workspace_root
-      ? path.join(state.workspace_root, 'skills', 'tc-memory')
-      : null;
-    if (skillDir && fs.existsSync(skillDir)) {
-      fs.rmSync(skillDir, { recursive: true });
-      log.info(`  ✓ Removed: ${skillDir}`);
-    } else {
-      log.info('  → Skill not found, skipping');
-    }
+    await removeSkill(state.workspace_root);
+    log.info('  ✓ Skill removed from ~/.openclaw/skills');
   } catch (err) {
     log.warn(`  ✗ Could not remove skill: ${err.message}`);
     errors.push(`Skill removal failed: ${err.message}`);
