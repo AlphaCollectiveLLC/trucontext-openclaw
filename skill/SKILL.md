@@ -23,7 +23,7 @@ tc-memory query "<question>" [--limit N]
 # What gaps has TC identified in your graph?
 tc-memory gaps
 
-# What is the fitness dreamer saying about your recipe alignment?
+# What is TC's intelligence layer reporting about your recipe alignment?
 tc-memory health
 
 # Find an existing node before creating a new one
@@ -53,9 +53,9 @@ This gives you node IDs to anchor ingests during the session.
 
 ## Ingest protocol — testify, don't summarize
 
-TC's dreamers pattern-match across ingests. Pre-digested conclusions starve them.
+TC's intelligence layer pattern-matches across ingests. Pre-digested conclusions starve it.
 
-**Before ingesting, ask:** *If the fitness dreamer read only this, could it learn something the entity didn't explicitly say?*
+**Before ingesting, ask:** *If TC's intelligence layer read only this, could it learn something the entity didn't explicitly say?*
 
 If yes — it's signal. Submit it.
 If no — rewrite it. Find the friction. Find the turn. Find the moment before you knew the answer.

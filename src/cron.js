@@ -133,7 +133,6 @@ export function unregisterCron() {
 // ---------------------------------------------------------------------------
 
 function appendHarvestLog(entries) {
-  import path from 'path'; // already imported above
   const dir = path.dirname(TC_HARVEST_LOG_PATH);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   fs.appendFileSync(TC_HARVEST_LOG_PATH, entries.join('\n') + '\n', 'utf8');

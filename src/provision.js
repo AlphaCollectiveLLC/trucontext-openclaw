@@ -66,11 +66,14 @@ export async function provisionOne({ agentId, reProvision = false, userRootNode,
     },
   });
 
+  // Unwrap { data: { ... } } response shape
+  const result = response.data ?? response;
+
   if (verbose) {
-    console.log(`  ✓ Root node: ${response.root_node.id}`);
-    console.log(`  ✓ Recipe: ${response.root_node.recipe}`);
-    if (response.recipe_inference?.inferred) {
-      console.log(`  ✓ Recipe inferred with confidence: ${response.recipe_inference.confidence}`);
+    console.log(`  ✓ Root node: ${result.agent_root}`);
+    console.log(`  ✓ Recipe: ${result.recipe_id}`);
+    if (result.recipe_inference === 'pending') {
+      console.log(`  ✓ Recipe inference: pending (async)`);
     }
   }
 
@@ -78,26 +81,27 @@ export async function provisionOne({ agentId, reProvision = false, userRootNode,
     // Inject prompt fragment into AGENTS.md
     const { changed: fragmentChanged, hash } = injectFragment(
       agent.agentsPath,
-      response.prompt_fragment
+      result.prompt_fragment
     );
     if (verbose && fragmentChanged) console.log(`  ✓ AGENTS.md updated`);
 
-    // Update state
+    // Update state — map from actual response fields
+    const { getTcVersion } = await import('./auth.js');
     registerAgent(agentId, {
       name: agent.name,
       workspace: agent.workspace,
-      root_node: response.wrapper_config.root_node,
-      user_root: response.wrapper_config.user_root,
-      recipe: response.wrapper_config.recipe,
-      primary_about: response.wrapper_config.primary_about,
-      tc_version: response.wrapper_config.tc_version,
+      root_node: result.agent_root,
+      user_root: userRootNode,
+      recipe: result.recipe_id,
+      primary_about: agentId,
+      tc_version: getTcVersion() ?? '0.0.0',
       last_harvested: new Date().toISOString(),
       prompt_fragment_hash: hash,
       files: getFileMtimeMap(agent),
     });
   }
 
-  return { changed: true, response };
+  return { changed: true, response: result };
 }
 
 /**

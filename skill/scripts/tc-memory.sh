@@ -162,14 +162,17 @@ case "$VERB" in
             *) shift ;;
           esac
         done
-        # Create relationship via ingest with explicit context
+        # TODO: Replace with `trucontext entities edges create` once available in TC CLI.
+        # Currently, TC CLI `entities edges` is list-only — no create command exists.
+        # Workaround: ingest the relationship as content. TC's intelligence layer will
+        # detect and formalize the edge during entity-linking dream cycles.
         trucontext ingest "Relationship declared: ${FROM_ID} ${REL} ${TO_ID}" \
           --context "${FROM_ID}:ABOUT" \
           --context "${TO_ID}:ABOUT" \
           --context "${ROOT_NODE}:BY" \
           --no-temporal
-        echo "Note: explicit edge creation via REST API not yet available in CLI."
-        echo "Relationship ingested as content. TC's entity-linking dreamer will formalize it."
+        echo "Note: Edge creation via CLI not yet available. Relationship ingested as content."
+        echo "TC's intelligence layer will formalize it during the next dream cycle."
         ;;
       *)
         echo "Usage: tc-memory node <find|create|get|link>" >&2

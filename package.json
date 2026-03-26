@@ -10,15 +10,9 @@
   "openclaw": {
     "extensions": ["./src/plugin.js"]
   },
-  "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch"
-  },
+  "scripts": {},
   "dependencies": {},
-  "devDependencies": {
-    "@sinclair/typebox": "^0.33.0",
-    "typescript": "^5.4.0"
-  },
+  "devDependencies": {},
   "peerDependencies": {
     "openclaw": ">=2026.3.0"
   },

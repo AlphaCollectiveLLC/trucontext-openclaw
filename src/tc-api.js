@@ -12,7 +12,7 @@ import { spawnSync } from 'child_process';
 import { checkAuth, getAccessToken, getTcVersion } from './auth.js';
 import { log } from './utils.js';
 
-const TC_API_BASE = process.env.TC_API_BASE ?? 'https://api.trucontext.ai';
+const TC_API_BASE = process.env.TC_API_BASE ?? 'https://platform.trucontext.ai';
 const STUB_MODE = process.env.TC_STUB_MODE === 'true';
 
 // ---------------------------------------------------------------------------
@@ -46,7 +46,7 @@ export async function provisionAgent({ agent, user, content, hints = {}, options
 
   log.debug(`provisionAgent: POST ${TC_API_BASE}/v1/agents/provision body=${JSON.stringify({ agent: body.agent })}`);
 
-  const res = await fetch(`${TC_API_BASE}/v1/agents/provision`, {
+  const res = await fetch(`${TC_API_BASE}/v1/apps/${appId}/agents/provision`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -154,35 +154,29 @@ function tc(args) {
 // ---------------------------------------------------------------------------
 
 function stubProvisionResponse(agent, userRoot) {
-  const version = getTcVersion() ?? '0.0.0';
   return {
-    status: 'provisioned',
-    agent_id: agent.id,
-    root_node: {
-      id: agent.id,
-      created: true,
-      recipe: 'recipe:behavioral-observation',
-      dreamers: ['decay', 'concepts', 'curiosity', 'fitness'],
-    },
-    wrapper_config: {
-      agent_id: agent.id,
-      root_node: agent.id,
+    data: {
+      agent_root: agent.id,
       user_root: userRoot,
-      recipe: 'recipe:behavioral-observation',
-      primary_about: agent.id,
-      tc_version: version,
+      status: 'created',
+      recipe_id: 'recipe:generic',
+      recipe_inference: 'skipped',
+      prompt_fragment: [
+        '## Memory',
+        `Load the \`tc-memory\` skill. Your root node: ${agent.id}. User root: ${userRoot}.`,
+        '',
+        '# Memory Briefing (stub)',
+        '',
+        'This is a stub response. Set TC_STUB_MODE=false to get a real LLM-generated briefing.',
+        '',
+        '<!-- trucontext-openclaw managed — do not edit manually -->',
+      ].join('\n'),
+      content_ingested: {
+        soul: true,
+        agents: false,
+        identity: false,
+        memory_files: 0,
+      },
     },
-    prompt_fragment: [
-      '## TruContext Memory',
-      '',
-      'Load the `tc-memory` skill at session start.',
-      '',
-      `- Your root node: ${agent.id}`,
-      `- User root node: ${userRoot}`,
-      '- Recipe: recipe:behavioral-observation',
-      '',
-      '<!-- trucontext-openclaw managed — do not edit manually -->',
-    ].join('\n'),
-    recipe_inference: { inferred: false, recipe: 'recipe:behavioral-observation', confidence: null },
   };
 }
