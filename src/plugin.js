@@ -5,14 +5,16 @@
  *   gateway_start        — provision new agents, refresh all briefings
  *   before_compaction    — ingest conversation to TC graph (fire and forget)
  *   after_compaction     — refresh TC-BRIEFING.md
- *   before_prompt_build  — inject context for lightweight/isolated sessions only
+ *   before_prompt_build  — inject TC-BRIEFING.md for all sessions
  *
- * TC-BRIEFING.md is injected into interactive sessions automatically by OpenClaw
+ * TC-BRIEFING.md is NOT in OpenClaw's fixed bootstrap file list, so it must
  * (workspace bootstrap file set). No before_prompt_build needed for those.
  *
  * Debug logging: set DEBUG=trucontext or TC_DEBUG=true
  */
 
+import fs from 'fs';
+import path from 'path';
 import { definePluginEntry } from 'openclaw/plugin-sdk/plugin-entry';
 import { readState } from './state.js';
 import { discoverAgents, discoverUnprovisioned } from './discover.js';
@@ -178,7 +180,31 @@ export default definePluginEntry({
       // Only handle lightweight sessions (heartbeat, cron)
       // Interactive sessions are handled by TC-BRIEFING.md bootstrap injection
       const trigger = ctx.trigger; // "user" | "heartbeat" | "cron" | "memory"
-      if (!trigger || trigger === 'user') return {};
+
+      // For user (interactive) sessions — inject TC-BRIEFING.md as cacheable system context.
+      // TC-BRIEFING.md is written to the agent workspace by refreshBriefing() but is NOT
+      // in OpenClaw's fixed bootstrap file list, so it must be injected here.
+      if (!trigger || trigger === 'user') {
+        const agentId = ctx.agentId;
+        if (!agentId || !state.app_id) return {};
+        const agentState = state.agents?.[agentId];
+        if (!agentState) return {};
+        try {
+          const agents = discoverAgents();
+          const agent = agents.find(a => a.id === agentId);
+          if (!agent) return {};
+          const briefingPath = path.join(agent.workspace, 'TC-BRIEFING.md');
+          if (fs.existsSync(briefingPath)) {
+            const briefing = fs.readFileSync(briefingPath, 'utf8').trim();
+            if (briefing && !briefing.includes('No briefing available yet')) {
+              return { appendSystemContext: `
+${briefing}
+` };
+            }
+          }
+        } catch { /* non-fatal */ }
+        return {};
+      }
 
       const agentId = ctx.agentId;
       if (!agentId) return {};
