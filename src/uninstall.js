@@ -120,6 +120,12 @@ export async function uninstall({ args = [] } = {}) {
       fs.rmSync(extDir, { recursive: true, force: true });
       log.info('  \u2713 Extension dir removed');
     }
+
+    // Re-enable memory-core so OpenClaw isn't left without a memory plugin
+    const enableResult = spawnSync('openclaw', ['plugins', 'enable', 'memory-core'], { encoding: 'utf8' });
+    if (enableResult.status === 0) {
+      log.info('  \u2713 memory-core re-enabled');
+    }
   } catch (err) {
     log.warn(`  \u2717 Could not unregister plugin: ${err.message}`);
   }
