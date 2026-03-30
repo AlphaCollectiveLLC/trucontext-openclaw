@@ -1,45 +1,74 @@
 /**
  * TruContext REST API client
  *
- * Thin wrapper over the TC REST API. All functions read credentials from state.
- * No CLI wrappers — everything goes through fetch().
+ * Uses the TC CLI's own auth module (ensureFreshToken) and config (URLs) so
+ * we always use the same token + endpoints as the CLI itself — no divergence.
+ *
+ * Data plane  (api.trucontext.ai)     — ingest, recall, query, provision, briefing, hot-topics
+ * Control plane (platform.trucontext.ai) — apps, auth validation
  *
  * Set TC_STUB_MODE=true for local development — returns mock responses.
  */
 
-import { readState } from './state.js';
-import { TC_API_BASE, STUB_MODE, log } from './utils.js';
+import { STUB_MODE, log } from './utils.js';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function headers(state) {
-  return {
-    'x-api-key': state?.api_key ?? '',
-    'Content-Type': 'application/json',
-  };
+// Lazy-import TC CLI internals so missing package gives a clear error
+async function getTcInternals() {
+  try {
+    // Resolve the TC CLI package dynamically from PATH
+    const { createRequire } = await import('module');
+    const { spawnSync } = await import('child_process');
+    const npmRoot = spawnSync('npm', ['root', '-g'], { encoding: 'utf8' }).stdout.trim();
+    const tcRoot = `${npmRoot}/trucontext`;
+    const [{ ensureFreshToken }, { DATA_PLANE_URL, CONTROL_PLANE_URL, getActiveApp }] = await Promise.all([
+      import(`${tcRoot}/src/auth.js`),
+      import(`${tcRoot}/src/config.js`),
+    ]);
+    return { ensureFreshToken, DATA_PLANE_URL, CONTROL_PLANE_URL, getActiveApp };
+  } catch {
+    // Fallback: try npx / global path resolution
+    throw new Error('TruContext CLI not found. Run: npm install -g trucontext');
+  }
 }
 
-async function apiCall(method, path, state, body) {
-  const url = `${TC_API_BASE}${path}`;
+// ---------------------------------------------------------------------------
+// HTTP helpers
+// ---------------------------------------------------------------------------
+
+async function apiCall(plane, method, path, body) {
+  const { ensureFreshToken, DATA_PLANE_URL, CONTROL_PLANE_URL } = await getTcInternals();
+  const baseUrl = plane === 'data' ? DATA_PLANE_URL : CONTROL_PLANE_URL;
+  const url = `${baseUrl}${path}`;
+
   log.debug(`tc-api: ${method} ${url}`);
 
-  const res = await fetch(url, {
-    method,
-    headers: headers(state),
-    ...(body && { body: JSON.stringify(body) }),
-  });
+  const token = await ensureFreshToken();
+  const ac = new AbortController();
+  const timeout = setTimeout(() => ac.abort(), 30000);
 
-  if (!res.ok) {
-    const errText = await res.text();
-    if (res.status === 401 || res.status === 403) {
-      throw new AuthExpiredError('TC auth expired or invalid. Run: npx trucontext login');
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      ...(body && { body: JSON.stringify(body) }),
+      signal: ac.signal,
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      if (res.status === 401 || res.status === 403) {
+        throw new AuthExpiredError('TC auth expired or invalid. Run: trucontext-openclaw install');
+      }
+      throw new Error(`TC API ${method} ${path} failed (${res.status}): ${errText}`);
     }
-    throw new Error(`TC API ${method} ${path} failed (${res.status}): ${errText}`);
-  }
 
-  return res.json();
+    return res.json();
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -55,8 +84,7 @@ export async function provision(appId, payload) {
     log.warn(`[STUB] provision for ${payload.agent?.id}`);
     return stubProvisionResponse(payload.agent, payload.user?.root_node);
   }
-  const state = readState();
-  return apiCall('POST', `/v1/apps/${appId}/agents/provision`, state, payload);
+  return apiCall('data', 'POST', `/v1/apps/${appId}/agents/provision`, payload);
 }
 
 /**
@@ -65,8 +93,7 @@ export async function provision(appId, payload) {
  */
 export async function getMemoryLoad(appId, agentId) {
   if (STUB_MODE) return { data: { status: 'pending' } };
-  const state = readState();
-  return apiCall('GET', `/v1/apps/${appId}/agents/${agentId}/memory-load`, state);
+  return apiCall('data', 'GET', `/v1/apps/${appId}/agents/${agentId}/memory-load`);
 }
 
 /**
@@ -75,8 +102,7 @@ export async function getMemoryLoad(appId, agentId) {
  */
 export async function listHotTopics(appId, agentId) {
   if (STUB_MODE) return { data: [] };
-  const state = readState();
-  return apiCall('GET', `/v1/apps/${appId}/agents/${agentId}/hot-topics`, state);
+  return apiCall('data', 'GET', `/v1/apps/${appId}/agents/${agentId}/hot-topics`);
 }
 
 /**
@@ -85,8 +111,7 @@ export async function listHotTopics(appId, agentId) {
  */
 export async function getHotTopic(appId, agentId, slug) {
   if (STUB_MODE) return { data: null };
-  const state = readState();
-  return apiCall('GET', `/v1/apps/${appId}/agents/${agentId}/hot-topics/${encodeURIComponent(slug)}`, state);
+  return apiCall('data', 'GET', `/v1/apps/${appId}/agents/${agentId}/hot-topics/${encodeURIComponent(slug)}`);
 }
 
 /**
@@ -95,8 +120,7 @@ export async function getHotTopic(appId, agentId, slug) {
  */
 export async function ingest(appId, payload) {
   if (STUB_MODE) { log.warn('[STUB] ingest'); return { data: { status: 'ok' } }; }
-  const state = readState();
-  return apiCall('POST', `/v1/apps/${appId}/ingest`, state, payload);
+  return apiCall('data', 'POST', `/v1/apps/${appId}/ingest`, payload);
 }
 
 /**
@@ -105,8 +129,7 @@ export async function ingest(appId, payload) {
  */
 export async function recall(appId, rootId, query, opts = {}) {
   if (STUB_MODE) return { data: { synthesis: { summary: '' } } };
-  const state = readState();
-  return apiCall('POST', `/v1/apps/${appId}/recall`, state, {
+  return apiCall('data', 'POST', `/v1/apps/${appId}/recall`, {
     query,
     root_id: rootId,
     maxResults: opts.maxResults ?? 10,
@@ -121,12 +144,27 @@ export async function recall(appId, rootId, query, opts = {}) {
  */
 export async function query(appId, rootId, question, opts = {}) {
   if (STUB_MODE) return { data: { answer: '' } };
-  const state = readState();
-  return apiCall('POST', `/v1/apps/${appId}/query`, state, {
+  return apiCall('data', 'POST', `/v1/apps/${appId}/query`, {
     question,
     root_id: rootId,
     maxResults: opts.maxResults ?? 10,
   });
+}
+
+/**
+ * Validate auth against the control plane (used by install wizard).
+ * GET /apps — returns true if token is valid.
+ */
+export async function validateAuth() {
+  if (STUB_MODE) return true;
+  try {
+    await apiCall('control', 'GET', '/apps');
+    return true;
+  } catch (err) {
+    if (err instanceof AuthExpiredError || err.status === 401 || err.status === 403) return false;
+    // Network error or other — treat as invalid
+    return false;
+  }
 }
 
 // ---------------------------------------------------------------------------

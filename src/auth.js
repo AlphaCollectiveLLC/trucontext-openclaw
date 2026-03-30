@@ -81,8 +81,8 @@ export function login(appId) {
   const result = spawnSync('trucontext', ['login'], { stdio: 'inherit', encoding: 'utf8' });
   if (result.status !== 0) throw new Error('TruContext login failed or was cancelled.');
 
-  // After OAuth, TC CLI shows an interactive app selector — bypass it by
-  // calling `trucontext use <appId>` if we already know the app ID.
+  // After login, the TC CLI prompts interactively to select an app.
+  // If we know the app ID, set it programmatically to skip the selector.
   if (appId) {
     const useResult = spawnSync('trucontext', ['use', appId], { encoding: 'utf8' });
     log.debug(`trucontext use ${appId}: ${useResult.stdout?.trim()}`);
@@ -95,24 +95,10 @@ export function login(appId) {
  * Uses a lightweight GET /v1/apps endpoint (list apps).
  */
 export async function validateToken() {
+  // Delegate to tc-api which uses the TC CLI's own ensureFreshToken + correct endpoints
   try {
-    const creds = JSON.parse(fs.readFileSync(TC_CREDENTIALS_PATH, 'utf8'));
-    const token = creds.idToken ?? creds.accessToken ?? creds.token ?? null;
-    if (!token) return false;
-
-    const { TC_API_BASE } = await import('./utils.js');
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-    const res = await fetch(`${TC_API_BASE}/v1/apps`, {
-      method: 'GET',
-      headers: {
-        'x-api-key': creds.apiKey ?? creds.api_key ?? token,
-        'Content-Type': 'application/json',
-      },
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-    return res.ok;
+    const { validateAuth } = await import('./tc-api.js');
+    return await validateAuth();
   } catch {
     return false;
   }
