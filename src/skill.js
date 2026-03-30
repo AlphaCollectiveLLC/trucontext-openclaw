@@ -1,15 +1,10 @@
 /**
- * trucontext-openclaw skill installer
+ * trucontext-openclaw skill installer (simplified)
  *
- * Installs the skill into ~/.openclaw/skills (shared across ALL agents),
- * not into a single agent workspace. This ensures every agent has access
- * without requiring per-agent installs.
+ * Installs the tc-memory skill into ~/.openclaw/skills (shared across all agents).
  *
  * Preferred path: `openclaw skills install trucontext-openclaw --force`
- * (ClawHub managed — visible to `openclaw skills list`, `check`, `update`).
- *
- * Fallback path: manual file copy from the bundled skill/ template.
- * Used when ClawHub install is unavailable (e.g. offline, not yet published).
+ * Fallback path: manual file copy from bundled skill/ template.
  */
 
 import fs from 'fs';
@@ -21,58 +16,40 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SKILL_TEMPLATE_DIR = path.join(__dirname, '..', 'skill');
 const CLAWHUB_SLUG = 'trucontext-openclaw';
-
-// Shared skills dir — visible to all agents on this machine
 const SHARED_SKILLS_DIR = path.join(os.homedir(), '.openclaw', 'skills');
 
 /**
- * Install (or update) the trucontext-openclaw skill into ~/.openclaw/skills.
- *
- * Tries `openclaw skills install` first (ClawHub managed path).
- * Falls back to bundled file copy if ClawHub install fails.
- *
+ * Install (or update) the trucontext-openclaw skill.
  * Returns { method: 'clawhub' | 'bundled' }
  */
-export async function installSkill(_workspaceRoot) {
-  // Ensure shared skills dir exists
+export async function installSkill() {
   fs.mkdirSync(SHARED_SKILLS_DIR, { recursive: true });
 
-  // Preferred: install via openclaw CLI (ClawHub managed)
   try {
-    execSync(
-      `openclaw skills install ${CLAWHUB_SLUG} --force`,
-      { encoding: 'utf8', stdio: 'pipe' }
-    );
-    // Also copy to shared dir so all agents pick it up regardless of active workspace
+    execSync(`openclaw skills install ${CLAWHUB_SLUG} --force`, { encoding: 'utf8', stdio: 'pipe' });
     _installFromTemplate(SHARED_SKILLS_DIR);
     return { method: 'clawhub' };
   } catch {
     // ClawHub install failed — fall back to bundled copy
   }
 
-  // Fallback: manual file copy from bundled template into shared skills dir
   _installFromTemplate(SHARED_SKILLS_DIR);
   return { method: 'bundled' };
 }
 
 /**
- * Remove the trucontext-openclaw skill from the shared skills dir.
- * Also cleans up the legacy tc-memory location if present.
+ * Remove the skill from the shared skills dir.
  */
-export async function removeSkill(_workspaceRoot) {
-  const sharedTarget = path.join(SHARED_SKILLS_DIR, CLAWHUB_SLUG);
-  if (fs.existsSync(sharedTarget)) {
-    fs.rmSync(sharedTarget, { recursive: true });
-  }
-  // Clean up legacy tc-memory install location if present
-  const legacyTarget = path.join(SHARED_SKILLS_DIR, 'tc-memory');
-  if (fs.existsSync(legacyTarget)) {
-    fs.rmSync(legacyTarget, { recursive: true });
-  }
+export async function removeSkill() {
+  const target = path.join(SHARED_SKILLS_DIR, CLAWHUB_SLUG);
+  if (fs.existsSync(target)) fs.rmSync(target, { recursive: true });
+
+  const legacy = path.join(SHARED_SKILLS_DIR, 'tc-memory');
+  if (fs.existsSync(legacy)) fs.rmSync(legacy, { recursive: true });
 }
 
 // ---------------------------------------------------------------------------
-// Internal helpers
+// Internal
 // ---------------------------------------------------------------------------
 
 function _installFromTemplate(baseDir) {
@@ -86,17 +63,16 @@ function _installFromTemplate(baseDir) {
   fs.writeFileSync(path.join(targetDir, 'SKILL.md'), skillMd, 'utf8');
 
   // Copy main script
-  const script = fs.readFileSync(
-    path.join(SKILL_TEMPLATE_DIR, 'scripts', 'trucontext-openclaw.sh'),
-    'utf8'
-  );
-  const scriptDest = path.join(scriptsDir, 'trucontext-openclaw.sh');
-  fs.writeFileSync(scriptDest, script, 'utf8');
-  fs.chmodSync(scriptDest, '755');
+  const scriptSrc = path.join(SKILL_TEMPLATE_DIR, 'scripts', 'trucontext-openclaw.sh');
+  if (fs.existsSync(scriptSrc)) {
+    const script = fs.readFileSync(scriptSrc, 'utf8');
+    const scriptDest = path.join(scriptsDir, 'trucontext-openclaw.sh');
+    fs.writeFileSync(scriptDest, script, 'utf8');
+    fs.chmodSync(scriptDest, '755');
 
-  // Symlink tc-memory.sh → trucontext-openclaw.sh for backward compatibility
-  // with any AGENTS.md files that still reference `tc-memory`
-  const symlinkDest = path.join(scriptsDir, 'tc-memory.sh');
-  if (fs.existsSync(symlinkDest)) fs.unlinkSync(symlinkDest);
-  fs.symlinkSync('trucontext-openclaw.sh', symlinkDest);
+    // Backward compat symlink
+    const symlinkDest = path.join(scriptsDir, 'tc-memory.sh');
+    if (fs.existsSync(symlinkDest)) fs.unlinkSync(symlinkDest);
+    fs.symlinkSync('trucontext-openclaw.sh', symlinkDest);
+  }
 }

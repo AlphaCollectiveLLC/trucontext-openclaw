@@ -114,3 +114,34 @@ export function getAccessToken() {
     throw new Error('Could not read TC credentials. Run: trucontext login');
   }
 }
+
+// ---------------------------------------------------------------------------
+// TC CLI wrappers (used only during install, not at runtime)
+// ---------------------------------------------------------------------------
+
+function tc(args) {
+  log.debug(`tc: trucontext ${args.join(' ')}`);
+  const result = spawnSync('trucontext', args, { encoding: 'utf8' });
+  if (result.status !== 0 || result.error) {
+    const msg = (result.stderr || result.stdout || result.error?.message || 'unknown error').trim();
+    throw new Error(`trucontext ${args[0]} failed: ${msg}`);
+  }
+  return result.stdout.trim();
+}
+
+export function tcRootsList() {
+  return tc(['roots', 'list']);
+}
+
+export function tcRootsCreate({ id, type, name, recipe, dreamers, contextLinks = [] }) {
+  const args = [
+    'roots', 'create',
+    '--id', id,
+    '--type', type,
+    '--recipe', recipe,
+    '--properties', JSON.stringify({ name }),
+  ];
+  if (dreamers?.length) args.push('--dreamers', dreamers.join(','));
+  for (const link of contextLinks) args.push('--context', link);
+  return tc(args);
+}

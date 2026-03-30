@@ -2,6 +2,7 @@
   "id": "trucontext-openclaw",
   "name": "TruContext Memory",
   "description": "Persistent knowledge graph memory for all OpenClaw agents, powered by TruContext",
+  "kind": "memory",
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
@@ -13,23 +14,18 @@
       },
       "cronSchedule": {
         "type": "string",
-        "description": "Cron schedule for daily maintenance (default: 2am)",
-        "default": "0 2 * * *"
+        "description": "Cron schedule for daily sync (default: 3am)",
+        "default": "0 3 * * *"
       },
       "memoryDays": {
         "type": "number",
         "description": "Days of memory files to harvest on provision",
         "default": 7
       },
-      "promptInjection": {
-        "type": "boolean",
-        "description": "Inject TC recall context into every agent turn via before_prompt_build",
-        "default": true
-      },
-      "recallLimit": {
-        "type": "number",
-        "description": "Max recall results to inject per turn",
-        "default": 5
+      "webhookPath": {
+        "type": "string",
+        "description": "HTTP route path for TC webhooks",
+        "default": "/trucontext/webhook"
       }
     }
   }

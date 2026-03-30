@@ -14,10 +14,14 @@ import os from 'os';
 // Paths (single source of truth)
 // ---------------------------------------------------------------------------
 
-export const OPENCLAW_CONFIG_PATH = path.join(os.homedir(), '.openclaw', 'openclaw.json');
-export const TC_STATE_PATH = path.join(os.homedir(), '.trucontext', 'openclaw-state.json');
-export const TC_HARVEST_LOG_PATH = path.join(os.homedir(), '.trucontext', 'harvest-log.md');
+export const OPENCLAW_DIR = path.join(os.homedir(), '.openclaw');
+export const OPENCLAW_CONFIG_PATH = path.join(OPENCLAW_DIR, 'openclaw.json');
+export const TC_STATE_PATH = path.join(OPENCLAW_DIR, 'trucontext.json');
 export const TC_CREDENTIALS_PATH = path.join(os.homedir(), '.trucontext', 'credentials.json');
+export const TC_HARVEST_LOG_PATH = path.join(os.homedir(), '.trucontext', 'harvest-log.md');
+
+export const TC_API_BASE = process.env.TC_API_BASE ?? 'https://api.trucontext.ai';
+export const STUB_MODE = process.env.TC_STUB_MODE === 'true';
 
 // ---------------------------------------------------------------------------
 // Logger (gated on DEBUG env var)
