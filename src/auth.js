@@ -76,10 +76,17 @@ export function checkAuth() {
   return { authed: true, email, appId };
 }
 
-export function login() {
+export function login(appId) {
   log.info('\n  Opening browser for TruContext login...');
   const result = spawnSync('trucontext', ['login'], { stdio: 'inherit', encoding: 'utf8' });
   if (result.status !== 0) throw new Error('TruContext login failed or was cancelled.');
+
+  // After OAuth, TC CLI shows an interactive app selector — bypass it by
+  // calling `trucontext use <appId>` if we already know the app ID.
+  if (appId) {
+    const useResult = spawnSync('trucontext', ['use', appId], { encoding: 'utf8' });
+    log.debug(`trucontext use ${appId}: ${useResult.stdout?.trim()}`);
+  }
 }
 
 /**

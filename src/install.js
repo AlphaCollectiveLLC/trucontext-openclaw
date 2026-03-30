@@ -60,7 +60,7 @@ export async function install({ args = [] } = {}) {
   const tokenValid = await validateToken();
   if (!tokenValid) {
     log.info('  \u26a0 Session expired \u2014 re-authenticating...');
-    login();
+    login(authState.appId);  // pass appId to auto-select app after OAuth, skipping interactive selector
     authState = checkAuth();
     if (!authState.authed) throw new Error('Authentication failed after re-login. Run: npx trucontext login');
     // Token is fresh — just logged in, skip second validation
