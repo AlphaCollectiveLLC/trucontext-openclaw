@@ -63,8 +63,7 @@ export async function install({ args = [] } = {}) {
     login();
     authState = checkAuth();
     if (!authState.authed) throw new Error('Authentication failed after re-login. Run: npx trucontext login');
-    const retryValid = await validateToken();
-    if (!retryValid) throw new Error('Token validation failed after re-login. Run: npx trucontext login');
+    // Token is fresh — just logged in, skip second validation
   }
 
   log.info(`  \u2713 Logged in as: ${authState.email}`);

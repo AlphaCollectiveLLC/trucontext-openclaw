@@ -94,13 +94,17 @@ export async function validateToken() {
     if (!token) return false;
 
     const { TC_API_BASE } = await import('./utils.js');
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
     const res = await fetch(`${TC_API_BASE}/v1/apps`, {
       method: 'GET',
       headers: {
         'x-api-key': creds.apiKey ?? creds.api_key ?? token,
         'Content-Type': 'application/json',
       },
+      signal: controller.signal,
     });
+    clearTimeout(timeout);
     return res.ok;
   } catch {
     return false;
