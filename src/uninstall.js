@@ -95,6 +95,35 @@ export async function uninstall({ args = [] } = {}) {
     errors.push(`State file deletion failed: ${err.message}`);
   }
 
+  // Step 5: Unregister OpenClaw plugin
+  log.info('\n\u2500\u2500 Unregistering plugin \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500');
+  try {
+    const { spawnSync } = await import('child_process');
+    const listResult = spawnSync('openclaw', ['plugins', 'list', '--json'], { encoding: 'utf8' });
+    if (listResult.stdout?.includes('trucontext-openclaw')) {
+      // pipe 'y' to the uninstall prompt
+      const result = spawnSync('openclaw', ['plugins', 'uninstall', 'trucontext-openclaw'], {
+        encoding: 'utf8',
+        input: 'y\n',
+      });
+      if (result.status === 0) {
+        log.info('  \u2713 Plugin unregistered from OpenClaw');
+      } else {
+        log.warn(`  \u2717 Plugin unregister failed: ${(result.stderr || result.stdout || '').trim()}`);
+      }
+    } else {
+      log.info('  \u2192 Plugin not registered, skipping');
+    }
+    // Also remove extension dir if it exists
+    const extDir = `${process.env.HOME}/.openclaw/extensions/trucontext-openclaw`;
+    if (fs.existsSync(extDir)) {
+      fs.rmSync(extDir, { recursive: true, force: true });
+      log.info('  \u2713 Extension dir removed');
+    }
+  } catch (err) {
+    log.warn(`  \u2717 Could not unregister plugin: ${err.message}`);
+  }
+
   // Summary
   if (errors.length > 0) {
     log.info('\n\u26a0 Uninstall completed with warnings:');

@@ -60,7 +60,7 @@ export async function install({ args = [] } = {}) {
   const tokenValid = await validateToken();
   if (!tokenValid) {
     log.info('  \u26a0 Session expired \u2014 re-authenticating...');
-    login(authState.appId);  // pass appId to auto-select app after OAuth, skipping interactive selector
+    login(authState.appId);  // pass appId to auto-select app after OAuth
     authState = checkAuth();
     if (!authState.authed) throw new Error('Authentication failed after re-login. Run: npx trucontext login');
     // Token is fresh — just logged in, skip second validation
@@ -141,11 +141,18 @@ export async function install({ args = [] } = {}) {
     log.info('  \u2713 Daily sync cron written to ~/.openclaw/cron/jobs.json');
   }
 
+  log.info('\n\u2500\u2500 Step 9: Register OpenClaw Plugin \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500');
+  if (!dryRun) {
+    await registerPlugin();
+  }
+
   log.info('\n\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557');
   log.info('\u2551   \u2713 TruContext memory is active for all agents     \u2551');
   log.info('\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n');
   log.info('TC-BRIEFING.md is now injected into every agent session.');
-  log.info('The plugin handles compaction, briefing refresh, and daily sync.\n');
+  log.info('The plugin handles compaction, briefing refresh, and daily sync.');
+  log.info('\n\u26a0  Restart the OpenClaw gateway for the plugin to take effect:');
+  log.info('    openclaw gateway restart\n');
 }
 
 // ---------------------------------------------------------------------------
@@ -154,6 +161,43 @@ export async function install({ args = [] } = {}) {
 
 import { TC_CREDENTIALS_PATH } from './utils.js';
 import { tcRootsList, tcRootsCreate } from './auth.js';
+
+async function registerPlugin() {
+  const { spawnSync } = await import('child_process');
+
+  // Check if already installed
+  const listResult = spawnSync('openclaw', ['plugins', 'list', '--json'], { encoding: 'utf8' });
+  if (listResult.stdout?.includes('trucontext-openclaw')) {
+    log.info('  ✓ Plugin already registered with OpenClaw');
+    return;
+  }
+
+  // Find where this package is installed
+  const npmRoot = spawnSync('npm', ['root', '-g'], { encoding: 'utf8' }).stdout.trim();
+  const pluginPath = `${npmRoot}/trucontext-openclaw`;
+
+  log.info(`  → Registering plugin with OpenClaw...`);
+
+  // Remove stale extension dir if it exists (openclaw plugins install fails if dir exists)
+  const { existsSync, rmSync } = await import('fs');
+  const extDir = `${process.env.HOME}/.openclaw/extensions/trucontext-openclaw`;
+  if (existsSync(extDir)) {
+    rmSync(extDir, { recursive: true, force: true });
+  }
+
+  const installResult = spawnSync(
+    'openclaw', ['plugins', 'install', pluginPath, '--link'],
+    { encoding: 'utf8' }
+  );
+
+  if (installResult.status !== 0) {
+    log.error(`  ✗ Plugin registration failed: ${(installResult.stderr || installResult.stdout || '').trim()}`);
+    log.error(`    Run manually: openclaw plugins install ${pluginPath} --link`);
+    return;
+  }
+
+  log.info('  ✓ Plugin registered — exclusive memory slot claimed');
+}
 
 async function ensureUserRootNode() {
   const rootsOutput = tcRootsList();
