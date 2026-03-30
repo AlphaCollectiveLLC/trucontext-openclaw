@@ -64,13 +64,28 @@ export default definePluginEntry({
         }
       }
 
-      // 2. Refresh briefings for all registered agents
+      // 2. Hash-check SOUL.md for all registered agents, re-provision if changed
       // Re-read state since provisioning may have updated it
       const freshState = readState();
       const agents = discoverAgents();
       for (const [agentId, agentState] of Object.entries(freshState.agents ?? {})) {
         const agent = agents.find(a => a.id === agentId);
         if (!agent) continue;
+        try {
+          const result = await provisionAgent({
+            agentId,
+            userRoot: freshState.user_root,
+            appId: freshState.app_id,
+            force: false,
+          });
+          if (result.changed) {
+            log.plugin(`gateway_start: re-provisioned ${agentId} (SOUL.md changed)`);
+          }
+        } catch (err) {
+          log.error(`Failed to check/re-provision ${agentId}: ${err.message}`);
+        }
+
+        // Refresh briefing regardless of re-provision
         try {
           await refreshBriefing(agent.workspace, freshState.app_id, agentState.agent_root);
         } catch (err) {
@@ -163,7 +178,7 @@ export default definePluginEntry({
       // Only handle lightweight sessions (heartbeat, cron)
       // Interactive sessions are handled by TC-BRIEFING.md bootstrap injection
       const trigger = ctx.trigger; // "user" | "heartbeat" | "cron" | "memory"
-      if (!trigger || trigger === 'user') return;
+      if (!trigger || trigger === 'user') return {};
 
       const agentId = ctx.agentId;
       if (!agentId) return;
