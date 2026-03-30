@@ -1,7 +1,7 @@
 /**
- * AGENTS.md prompt fragment injection
+ * SKILL.md prompt fragment injection
  *
- * Appends (or updates) a managed TruContext memory section in an agent's AGENTS.md.
+ * Injects (or updates) the TC-generated prompt_fragment into SKILL.md.
  * Uses HTML comment fence markers to identify the managed block — both start and end
  * are written on inject, so removeFragment can always find and cleanly remove the block
  * regardless of what else is in the file.
@@ -29,7 +29,7 @@ const NORMALIZED_HEADER = '## TruContext Memory';
 // ---------------------------------------------------------------------------
 
 /**
- * Inject or update the TC prompt fragment in an agent's AGENTS.md.
+ * Inject or update the TC prompt fragment in a target file (SKILL.md).
  * Always writes content wrapped in fence markers.
  * Returns { changed: bool, hash: string }
  */
