@@ -82,6 +82,31 @@ export function login() {
   if (result.status !== 0) throw new Error('TruContext login failed or was cancelled.');
 }
 
+/**
+ * Validate the stored token is still accepted by the TC API.
+ * Returns true if valid, false if expired/invalid.
+ * Uses a lightweight GET /v1/apps endpoint (list apps).
+ */
+export async function validateToken() {
+  try {
+    const creds = JSON.parse(fs.readFileSync(TC_CREDENTIALS_PATH, 'utf8'));
+    const token = creds.idToken ?? creds.accessToken ?? creds.token ?? null;
+    if (!token) return false;
+
+    const { TC_API_BASE } = await import('./utils.js');
+    const res = await fetch(`${TC_API_BASE}/v1/apps`, {
+      method: 'GET',
+      headers: {
+        'x-api-key': creds.apiKey ?? creds.api_key ?? token,
+        'Content-Type': 'application/json',
+      },
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 export function ensureApp(preferredName) {
   const { appId } = checkAuth();
   if (appId) {

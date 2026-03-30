@@ -17,7 +17,7 @@ import readline from 'readline';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { ensureTcInstalled, checkAuth, login, ensureApp, getTcVersion } from './auth.js';
+import { ensureTcInstalled, checkAuth, login, ensureApp, getTcVersion, validateToken } from './auth.js';
 import { discoverAgents, getOpenClawWorkspaceRoot } from './discover.js';
 import { provisionAgent } from './provision.js';
 import { installSkill } from './skill.js';
@@ -55,6 +55,18 @@ export async function install({ args = [] } = {}) {
     authState = checkAuth();
     if (!authState.authed) throw new Error('Authentication failed. Please try again.');
   }
+
+  // Validate token is still accepted by the TC API (catches expired tokens)
+  const tokenValid = await validateToken();
+  if (!tokenValid) {
+    log.info('  \u26a0 Session expired \u2014 re-authenticating...');
+    login();
+    authState = checkAuth();
+    if (!authState.authed) throw new Error('Authentication failed after re-login. Run: npx trucontext login');
+    const retryValid = await validateToken();
+    if (!retryValid) throw new Error('Token validation failed after re-login. Run: npx trucontext login');
+  }
+
   log.info(`  \u2713 Logged in as: ${authState.email}`);
 
   log.info('\n\u2500\u2500 Step 3: TruContext App \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500');
@@ -100,7 +112,17 @@ export async function install({ args = [] } = {}) {
         verbose: true,
       });
     } catch (err) {
-      log.error(`  ${err.message}`);
+      if (err.name === 'AuthExpiredError') {
+        log.info('  \u26a0 Auth expired during provisioning \u2014 re-authenticating...');
+        login();
+        try {
+          await provisionAgent({ agentId: agent.id, userRoot, appId, force: true, dryRun, verbose: true });
+        } catch (retryErr) {
+          log.error(`  ${retryErr.message}`);
+        }
+      } else {
+        log.error(`  ${err.message}`);
+      }
     }
   }
 
