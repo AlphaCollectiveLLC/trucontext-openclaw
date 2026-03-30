@@ -153,9 +153,20 @@ export async function install({ args = [] } = {}) {
   log.info('\u2551   \u2713 TruContext memory is active for all agents     \u2551');
   log.info('\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n');
   log.info('TC-BRIEFING.md is now injected into every agent session.');
-  log.info('The plugin handles compaction, briefing refresh, and daily sync.');
-  log.info('\n\u26a0  Restart the OpenClaw gateway for the plugin to take effect:');
-  log.info('    openclaw gateway restart\n');
+  log.info('The plugin handles compaction, briefing refresh, and daily sync.\n');
+
+  // Restart the gateway so the plugin loads immediately
+  if (!dryRun) {
+    log.info('\u2500\u2500 Restarting gateway \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500');
+    const { spawnSync } = await import('child_process');
+    const r = spawnSync('openclaw', ['gateway', 'restart'], { encoding: 'utf8', timeout: 15000 });
+    if (r.status === 0) {
+      log.info('  \u2713 Gateway restarted — plugin is active');
+    } else {
+      log.warn('  \u26a0 Gateway restart failed. Run manually: openclaw gateway restart');
+      log.warn('  ' + (r.stderr || r.stdout || '').trim().split('\n')[0]);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
