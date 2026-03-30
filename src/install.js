@@ -26,6 +26,7 @@ import { log, confirm, OPENCLAW_DIR } from './utils.js';
 
 export async function install({ args = [] } = {}) {
   const dryRun = args.includes('--dry-run');
+  const yes = args.includes('--yes') || args.includes('-y');
 
   log.info('\n\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557');
   log.info('\u2551         trucontext-openclaw \u2014 Install              \u2551');
@@ -40,7 +41,7 @@ export async function install({ args = [] } = {}) {
   log.info('  Privacy policy: https://trucontext.ai/privacy');
   log.info('  Uninstall: trucontext-openclaw uninstall\n');
 
-  if (!dryRun) {
+  if (!dryRun && !yes) {
     const proceed = await confirm('Continue? [y/N] ');
     if (!proceed) { log.info('\nInstall cancelled.'); process.exit(0); }
   }
@@ -93,12 +94,14 @@ export async function install({ args = [] } = {}) {
 
   log.info('\n\u2500\u2500 Step 6: Provision Agents \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500');
   for (const agent of agents) {
-    if (!dryRun) {
+    if (!dryRun && !yes) {
       const proceed = await confirm(
         `\n  Provision ${agent.name} (${agent.id})? [Y/n] `,
         true
       );
       if (!proceed) { log.info('  \u2192 Skipped'); continue; }
+    } else if (!dryRun) {
+      log.info(`\n  Provisioning ${agent.name} (${agent.id})...`);
     }
 
     try {

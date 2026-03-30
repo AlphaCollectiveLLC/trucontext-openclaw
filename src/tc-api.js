@@ -44,7 +44,7 @@ async function apiCall(plane, method, path, body) {
 
   const token = await ensureFreshToken();
   const ac = new AbortController();
-  const timeout = setTimeout(() => ac.abort(), 30000);
+  const timeout = setTimeout(() => ac.abort(), 90000);
 
   try {
     const res = await fetch(url, {
