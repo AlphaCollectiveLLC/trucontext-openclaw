@@ -173,7 +173,7 @@ export default definePluginEntry({
     // -----------------------------------------------------------------------
     api.on('before_prompt_build', async (event, ctx) => {
       const state = readState();
-      if (!state.app_id) return;
+      if (!state.app_id) return {};
 
       // Only handle lightweight sessions (heartbeat, cron)
       // Interactive sessions are handled by TC-BRIEFING.md bootstrap injection
@@ -181,17 +181,17 @@ export default definePluginEntry({
       if (!trigger || trigger === 'user') return {};
 
       const agentId = ctx.agentId;
-      if (!agentId) return;
+      if (!agentId) return {};
 
       const agentState = state.agents?.[agentId];
-      if (!agentState) return;
+      if (!agentState) return {};
 
       try {
         if (trigger === 'heartbeat') {
           // Heartbeat: inject hot topics manifest only
           const res = await tcApi.listHotTopics(state.app_id, agentState.agent_root);
           const topics = res?.data || [];
-          if (!topics.length) return;
+          if (!topics.length) return {};
           const manifest = topics.map(t => `- ${t.label} (${t.slug})`).join('\n');
           return {
             appendSystemContext: `\n## Active Memory Topics\n${manifest}\nUse tc-memory to fetch any topic: tc-memory hot-topic <slug>\n`,
@@ -246,6 +246,8 @@ export default definePluginEntry({
       } catch (err) {
         log.debug(`before_prompt_build failed for ${agentId} (${trigger}): ${err.message}`);
       }
+
+      return {};
     });
   },
 });
